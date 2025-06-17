@@ -7,6 +7,9 @@
 function doGet(e) {
   try {
     Logger.log("GET request received with params: " + JSON.stringify(e.parameter))
+    Logger.log("GET request method: " + (e.parameter.method || "GET"))
+    Logger.log("GET request headers: " + JSON.stringify(e.headers || {}))
+    
     var action = e.parameter.action || "test"
 
     if (action === "test") {
@@ -15,16 +18,18 @@ function doGet(e) {
         JSON.stringify({
           message: "Connection successful",
           timestamp: new Date().toISOString(),
-          status: "ok"
+          status: "ok",
+          received_params: e.parameter
         }),
       ).setMimeType(ContentService.MimeType.JSON)
       
-      // Add CORS headers
+      // Add comprehensive CORS headers
       response.setHeaders({
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Accept',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
+        'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization',
         'Access-Control-Max-Age': '86400',
+        'Cache-Control': 'no-cache',
       })
       
       Logger.log("Test response sent successfully")
@@ -190,7 +195,26 @@ function doGet(e) {
 function doPost(e) {
   try {
     Logger.log("POST request received")
-    Logger.log("POST data: " + e.postData.contents)
+    Logger.log("POST method: " + (e.method || "POST"))
+    Logger.log("POST headers: " + JSON.stringify(e.headers || {}))
+    Logger.log("POST data: " + (e.postData ? e.postData.contents : "No post data"))
+
+    if (!e.postData || !e.postData.contents) {
+      Logger.log("No post data received")
+      var response = ContentService.createTextOutput(
+        JSON.stringify({
+          error: "No data received in POST request",
+        }),
+      ).setMimeType(ContentService.MimeType.JSON)
+      
+      response.setHeaders({
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
+        'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization',
+      })
+      
+      return response
+    }
 
     var postData = e.postData.contents
     Logger.log("Content: " + postData)
@@ -722,12 +746,36 @@ function handleImageUpload(params) {
 // Handle preflight OPTIONS requests for CORS
 function doOptions(e) {
   Logger.log("OPTIONS request received")
-  return ContentService.createTextOutput("")
+  Logger.log("OPTIONS params: " + JSON.stringify(e.parameter || {}))
+  Logger.log("OPTIONS headers: " + JSON.stringify(e.headers || {}))
+  
+  var response = ContentService.createTextOutput("")
     .setMimeType(ContentService.MimeType.TEXT)
     .setHeaders({
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Accept',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
+      'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control',
       'Access-Control-Max-Age': '86400',
+      'Cache-Control': 'no-cache',
     })
+  
+  Logger.log("OPTIONS response sent")
+  return response
+}
+
+// Add a function to handle any HTTP method
+function doHead(e) {
+  return doOptions(e)
+}
+
+function doPut(e) {
+  return doPost(e)
+}
+
+function doDelete(e) {
+  return doPost(e)
+}
+
+function doPatch(e) {
+  return doPost(e)
 }

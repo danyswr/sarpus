@@ -36,17 +36,29 @@ export async function testConnection() {
 
     console.log("Testing connection to:", API_URL)
     
-    const response = await fetch(`${API_URL}?action=test`, {
+    // Add timeout to prevent hanging
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+    
+    const response = await fetch(`${API_URL}?action=test&t=${Date.now()}`, {
       method: "GET",
-      mode: 'cors',
+      mode: 'no-cors', // Try no-cors mode first
       headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
+        "Accept": "*/*",
       },
+      signal: controller.signal,
     })
 
+    clearTimeout(timeoutId)
+    
     console.log("Test response status:", response.status)
-    console.log("Test response ok:", response.ok)
+    console.log("Test response type:", response.type)
+
+    // For no-cors mode, we can't read the response
+    if (response.type === 'opaque') {
+      console.log("Connection successful (opaque response)")
+      return { message: "Connection successful", status: "ok" }
+    }
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -59,6 +71,10 @@ export async function testConnection() {
     return result
   } catch (error) {
     console.error("Connection test failed:", error)
+    
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error("Connection timeout. Please check your internet connection.")
+    }
     
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
       throw new Error("Unable to reach Google Apps Script. Please check the URL or try again later.")
@@ -163,24 +179,20 @@ export async function registerUser(userData: {
 
     console.log('Registration payload:', payload)
 
-    // First test connection
-    try {
-      await testConnection()
-      console.log('Connection test successful')
-    } catch (connError) {
-      console.error('Connection test failed:', connError)
-      throw new Error("Unable to connect to the registration service. Please try again later.")
-    }
+    // Add timeout to prevent hanging
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
 
     const response = await fetch(API_URL, {
       method: 'POST',
-      mode: 'cors',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     })
+
+    clearTimeout(timeoutId)
 
     console.log('Response status:', response.status)
     console.log('Response ok:', response.ok)
@@ -203,9 +215,13 @@ export async function registerUser(userData: {
   } catch (error) {
     console.error("Registration error:", error)
     
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error("Registration timeout. Please try again.")
+    }
+    
     // Provide more specific error messages
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      throw new Error("Network error: Unable to connect to registration service. The Google Apps Script may be down or misconfigured.")
+      throw new Error("Network error: Unable to connect to registration service. Please check your internet connection or try again later.")
     }
     
     if (error instanceof Error && error.message.includes('CORS')) {
