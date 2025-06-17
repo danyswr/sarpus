@@ -5,24 +5,24 @@ import { useRouter } from "next/navigation"
 import { useEffect } from "react"
 
 export default function DashboardPage() {
-  const { user, logout, isLoading } = useAuth()
+  const { user, isLoading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      router.push("/login")
+    console.log("Dashboard page - User:", user)
+    console.log("Dashboard page - isLoading:", isLoading)
+    if (user) {
+      console.log("Dashboard page - User role:", user.role)
     }
-  }, [user, isLoading, router])
+  }, [user, isLoading])
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Loading...</div>
-      </div>
-    )
+    return <div>Loading...</div>
   }
 
   if (!user) {
+    console.log("No user found, redirecting to login")
+    router.push("/login")
     return null
   }
 

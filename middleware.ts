@@ -2,17 +2,22 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 export function middleware(request: NextRequest) {
-  // Skip middleware for public pages
-  if (request.nextUrl.pathname.startsWith("/login") || 
-      request.nextUrl.pathname.startsWith("/register") ||
-      request.nextUrl.pathname === "/" ||
-      request.nextUrl.pathname.startsWith("/about")) {
+  const { pathname } = request.nextUrl
+
+  // Skip middleware for public pages and API routes
+  if (pathname.startsWith("/login") || 
+      pathname.startsWith("/register") ||
+      pathname === "/" ||
+      pathname.startsWith("/about") ||
+      pathname.startsWith("/api") ||
+      pathname.startsWith("/_next") ||
+      pathname.includes(".")) {
     return NextResponse.next()
   }
 
   // Check if user is accessing protected routes
   const protectedPaths = ["/dashboard", "/profile", "/admin"]
-  const isProtectedPath = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path))
+  const isProtectedPath = protectedPaths.some((path) => pathname.startsWith(path))
 
   if (isProtectedPath) {
     // Check if user has auth token in cookies
@@ -21,25 +26,39 @@ export function middleware(request: NextRequest) {
 
     // If no auth data, redirect to login
     if (!authCookie || !userCookie) {
+      console.log("No auth cookies found, redirecting to login")
       const loginUrl = new URL("/login", request.url)
-      loginUrl.searchParams.set("redirect", request.nextUrl.pathname)
+      loginUrl.searchParams.set("redirect", pathname)
       return NextResponse.redirect(loginUrl)
     }
 
     try {
       const userData = JSON.parse(decodeURIComponent(userCookie.value))
+      console.log("Middleware - User data:", userData)
+      console.log("Middleware - Current path:", pathname)
+      console.log("Middleware - User role:", userData.role)
+      
+      // Prevent redirect loops - allow exact path matches
+      if (pathname === "/admin" && userData.role?.toLowerCase() === "admin") {
+        console.log("Admin accessing admin page - allowing")
+        return NextResponse.next()
+      }
+      
+      if (pathname === "/dashboard" && userData.role?.toLowerCase() !== "admin") {
+        console.log("User accessing dashboard page - allowing")
+        return NextResponse.next()
+      }
       
       // Check role-based access for admin routes
-      if (request.nextUrl.pathname.startsWith("/admin")) {
+      if (pathname.startsWith("/admin")) {
         if (userData.role?.toLowerCase() !== "admin") {
-          // Redirect non-admin users to dashboard
           console.log("Non-admin user trying to access admin page, redirecting to dashboard")
           return NextResponse.redirect(new URL("/dashboard", request.url))
         }
       }
       
       // Redirect admin users trying to access regular dashboard to admin page
-      if (request.nextUrl.pathname.startsWith("/dashboard") && userData.role?.toLowerCase() === "admin") {
+      if (pathname.startsWith("/dashboard") && userData.role?.toLowerCase() === "admin") {
         console.log("Admin user accessing dashboard, redirecting to admin page")
         return NextResponse.redirect(new URL("/admin", request.url))
       }

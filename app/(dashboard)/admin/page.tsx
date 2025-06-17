@@ -1,4 +1,3 @@
-typescript jsx
 "use client"
 
 import { useAuth } from "@/lib/auth"
@@ -10,13 +9,30 @@ export default function AdminPage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      router.push("/login")
+    console.log("Admin page - User:", user)
+    console.log("Admin page - isLoading:", isLoading)
+    if (user) {
+      console.log("Admin page - User role:", user.role)
     }
-    if (!isLoading && user && user.role?.toLowerCase() !== "admin") {
-      router.push("/dashboard")
-    }
-  }, [user, isLoading, router])
+  }, [user, isLoading])
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-lg">Loading...</div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    console.log("No user found, redirecting to login")
+    router.push("/login")
+    return null
+  }
+
+  if (!isLoading && user && user.role?.toLowerCase() !== "admin") {
+    router.push("/dashboard")
+  }
 
   if (isLoading) {
     return (
