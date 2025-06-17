@@ -198,12 +198,16 @@ function doPost(e) {
     Logger.log("POST method: " + (e.method || "POST"))
     Logger.log("POST headers: " + JSON.stringify(e.headers || {}))
     Logger.log("POST data: " + (e.postData ? e.postData.contents : "No post data"))
+    Logger.log("POST parameter: " + JSON.stringify(e.parameter || {}))
 
     if (!e.postData || !e.postData.contents) {
       Logger.log("No post data received")
       var response = ContentService.createTextOutput(
         JSON.stringify({
           error: "No data received in POST request",
+          received_method: e.method || "POST",
+          received_headers: e.headers || {},
+          received_params: e.parameter || {}
         }),
       ).setMimeType(ContentService.MimeType.JSON)
       
@@ -301,11 +305,18 @@ function doPost(e) {
 
 function handleRegistration(params, sheetUsers) {
   try {
+    Logger.log("=== REGISTRATION ATTEMPT START ===")
     Logger.log("Registration attempt for email: " + params.email)
     Logger.log("Registration params: " + JSON.stringify(params))
+    Logger.log("Sheet Users exists: " + (sheetUsers ? "YES" : "NO"))
     
     if (!params.email || !params.username || !params.password || !params.nim || !params.jurusan) {
       Logger.log("Missing required fields")
+      Logger.log("Email: " + (params.email ? "OK" : "MISSING"))
+      Logger.log("Username: " + (params.username ? "OK" : "MISSING"))
+      Logger.log("Password: " + (params.password ? "OK" : "MISSING"))
+      Logger.log("NIM: " + (params.nim ? "OK" : "MISSING"))
+      Logger.log("Jurusan: " + (params.jurusan ? "OK" : "MISSING"))
       return ContentService.createTextOutput(
         JSON.stringify({
           error: "Semua field wajib diisi",
@@ -382,13 +393,15 @@ function handleRegistration(params, sheetUsers) {
     sheetUsers.appendRow(newUserRow)
 
     Logger.log("User registered successfully: " + idUsers)
+    Logger.log("=== REGISTRATION SUCCESS ===")
 
     return ContentService.createTextOutput(
       JSON.stringify({
         message: "Registrasi berhasil",
         idUsers: idUsers,
         role: role,
-        success: true
+        success: true,
+        timestamp: new Date().toISOString()
       }),
     ).setMimeType(ContentService.MimeType.JSON)
   } catch (e) {
