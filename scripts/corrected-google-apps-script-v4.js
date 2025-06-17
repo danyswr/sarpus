@@ -1,6 +1,6 @@
 
 /**
- * Google Apps Script untuk Mahasiswa Feedback Platform - FINAL VERSION
+ * Google Apps Script untuk Mahasiswa Feedback Platform - FINAL VERSION WITH IMPROVED CORS
  * Deploy sebagai web app dengan "Execute as: Me" dan "Who has access: Anyone"
  * 
  * STRUKTUR SPREADSHEET:
@@ -16,15 +16,28 @@ function doPost(e) {
   return handleRequest(e);
 }
 
+function doOptions(e) {
+  return handleRequest(e);
+}
+
 function handleRequest(e) {
   try {
-    // Create response dengan CORS headers
+    // Create response dengan CORS headers yang lebih lengkap
     var response = ContentService.createTextOutput();
     response.setMimeType(ContentService.MimeType.JSON);
+
+    // Handle preflight OPTIONS request
+    if (e.method === "OPTIONS") {
+      return response.setContent(JSON.stringify({ 
+        status: "ok",
+        message: "CORS preflight successful"
+      }));
+    }
 
     // Dapatkan action
     var action = getAction(e);
     Logger.log("Action: " + action);
+    Logger.log("Method: " + e.method);
     Logger.log("Parameters: " + JSON.stringify(e.parameter));
     if (e.postData) {
       Logger.log("POST data: " + e.postData.contents);
@@ -96,7 +109,9 @@ function testConnection() {
   return {
     message: "Connection successful",
     timestamp: new Date().toISOString(),
-    status: "ok"
+    status: "ok",
+    methods_supported: ["GET", "POST"],
+    cors_enabled: true
   };
 }
 
@@ -108,6 +123,7 @@ function handleLogin(e) {
 
     Logger.log("Login attempt for: " + email);
     Logger.log("Password received: " + (password ? "Yes (length: " + password.length + ")" : "No"));
+    Logger.log("Method: " + e.method);
 
     if (!email || !password) {
       return { error: "Email dan password harus diisi" };
@@ -149,8 +165,30 @@ function handleLogin(e) {
         Logger.log("User found! Stored password: " + userPassword);
         Logger.log("Input password: " + password);
         
-        // Check password - bisa plain text atau hashed
-        if (userPassword === password || userPassword === btoa(password)) {
+        // Check password - support plain text, base64, atau hash
+        var isPasswordValid = false;
+        
+        // Try direct match
+        if (userPassword === password) {
+          isPasswordValid = true;
+        }
+        // Try base64 decode
+        else if (userPassword === btoa(password)) {
+          isPasswordValid = true;
+        }
+        // Try decode base64 input
+        else {
+          try {
+            var decodedPassword = atob(password);
+            if (userPassword === decodedPassword) {
+              isPasswordValid = true;
+            }
+          } catch (e) {
+            // Not base64, continue
+          }
+        }
+        
+        if (isPasswordValid) {
           Logger.log("Password match!");
           
           return {
@@ -163,7 +201,8 @@ function handleLogin(e) {
             jurusan: row[findColumn(headers, "jurusan")] || "",
             bio: row[findColumn(headers, "bio")] || "",
             location: row[findColumn(headers, "location")] || "",
-            website: row[findColumn(headers, "website")] || ""
+            website: row[findColumn(headers, "website")] || "",
+            method_used: e.method || "GET"
           };
         } else {
           Logger.log("Password mismatch!");
@@ -212,15 +251,14 @@ function handleRegister(e) {
       }
     }
 
-    // Tambah user baru - simpan password sebagai hashed
+    // Tambah user baru
     var newId = "USER_" + Date.now();
-    var hashedPassword = userData.password; // Sudah di-hash dari client
     
     var newRow = [
       newId,                        // idUsers
       userData.username,            // username
       userData.email,               // email
-      hashedPassword,               // password (hashed)
+      userData.password,            // password
       "user",                       // role
       userData.nim || "",           // nim
       userData.jurusan || "",       // jurusan
@@ -432,11 +470,13 @@ function getCredentials(e) {
   var email = "";
   var password = "";
 
+  // Get from URL parameters first (GET method)
   if (e.parameter && e.parameter.email) {
     email = e.parameter.email;
     password = e.parameter.password || "";
   }
 
+  // Get from POST body if not found in parameters
   if (!email && e.postData && e.postData.contents) {
     try {
       var postData = JSON.parse(e.postData.contents);
@@ -453,14 +493,22 @@ function getCredentials(e) {
 function getUserData(e) {
   var data = {};
 
+  // Try GET parameters first
+  if (e.parameter) {
+    data = e.parameter;
+  }
+
+  // Try POST data
   if (e.postData && e.postData.contents) {
     try {
-      data = JSON.parse(e.postData.contents);
+      var postData = JSON.parse(e.postData.contents);
+      // Merge with GET parameters, POST takes precedence
+      for (var key in postData) {
+        data[key] = postData[key];
+      }
     } catch (parseError) {
-      data = e.parameter || {};
+      Logger.log("Parse error in getUserData: " + parseError.toString());
     }
-  } else {
-    data = e.parameter || {};
   }
 
   return data;
