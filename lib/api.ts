@@ -83,89 +83,56 @@ export async function loginUser(email: string, password: string) {
     // Hash password to match what's stored in spreadsheet
     const hashedPassword = btoa(password)
 
-    const payload = {
-      action: "login",
-      email,
-      password: hashedPassword,
-    }
-
-    console.log('Login payload:', payload)
+    console.log('Login with GET request first')
 
     // Add timeout to prevent hanging
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
 
-    // First try to get user data with GET request
-    try {
-      const getUserResponse = await fetch(`${API_URL}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(hashedPassword)}&t=${Date.now()}`, {
-        method: "GET",
-        signal: controller.signal,
-      })
-
-      clearTimeout(timeoutId)
-
-      if (getUserResponse.ok) {
-        const result = await getUserResponse.json()
-        console.log('Login response:', result)
-        
-        if (result.error) {
-          throw new Error(result.error)
-        }
-        
-        // If user found, verify password client-side since GAS returns hashed password
-        if (result.hashedPassword) {
-          if (result.hashedPassword === hashedPassword) {
-            return {
-              message: "Login berhasil",
-              idUsers: result.idUsers,
-              role: result.role,
-              username: result.username,
-              email: result.email,
-              nim: result.nim,
-              jurusan: result.jurusan,
-              bio: result.bio || "",
-              location: result.location || "",
-              website: result.website || "",
-            }
-          } else {
-            throw new Error("Password salah")
-          }
-        }
-        
-        return result
-      }
-    } catch (getError) {
-      console.log('GET login failed, trying POST with no-cors:', getError)
-    }
-
-    // If GET fails, try POST with no-cors (fallback)
-    const controller2 = new AbortController()
-    const timeoutId2 = setTimeout(() => controller2.abort(), 15000)
-
-    const response = await fetch(API_URL, {
-      method: "POST",
-      mode: "no-cors",
+    // Try GET request first (this works with CORS properly configured)
+    const getUserResponse = await fetch(`${API_URL}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(hashedPassword)}&t=${Date.now()}`, {
+      method: "GET",
       headers: {
+        "Accept": "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
-      signal: controller2.signal,
+      signal: controller.signal,
     })
 
-    clearTimeout(timeoutId2)
+    clearTimeout(timeoutId)
 
-    console.log('Login POST response status:', response.status)
-    console.log('Login POST response type:', response.type)
-
-    // In no-cors mode, we can't read the response, so we'll use mock data for now
-    // In a real implementation, you'd need to handle this differently
-    if (response.type === 'opaque') {
-      console.log('Login request sent successfully (no-cors mode)')
-      // For now, return a mock success since we can't read the actual response
-      throw new Error("Login tidak dapat diverifikasi dengan mode no-cors. Gunakan GET endpoint atau perbaiki CORS di Google Apps Script.")
+    if (!getUserResponse.ok) {
+      throw new Error(`HTTP error! status: ${getUserResponse.status}`)
     }
 
-    throw new Error("Login gagal - tidak dapat mengakses API")
+    const result = await getUserResponse.json()
+    console.log('Login response:', result)
+    
+    if (result.error) {
+      throw new Error(result.error)
+    }
+    
+    // If user found, verify password client-side since GAS returns hashed password
+    if (result.hashedPassword) {
+      if (result.hashedPassword === hashedPassword) {
+        return {
+          message: "Login berhasil",
+          idUsers: result.idUsers,
+          role: result.role,
+          username: result.username,
+          email: result.email,
+          nim: result.nim,
+          jurusan: result.jurusan,
+          bio: result.bio || "",
+          location: result.location || "",
+          website: result.website || "",
+        }
+      } else {
+        throw new Error("Password salah")
+      }
+    }
+    
+    return result
   } catch (error) {
     console.error("Login error:", error)
     

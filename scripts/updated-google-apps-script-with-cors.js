@@ -11,6 +11,12 @@ function doGet(e) {
     Logger.log("GET request headers: " + JSON.stringify(e.headers || {}))
     
     var action = e.parameter.action || "test"
+    
+    // Initialize spreadsheet and sheets at the beginning
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
+    var sheetUsers = spreadsheet.getSheetByName("Users")
+    var sheetPostingan = spreadsheet.getSheetByName("Posting")
+    var sheetLikes = spreadsheet.getSheetByName("Likes")
 
     if (action === "test") {
       Logger.log("Test connection requested")
@@ -41,6 +47,10 @@ function doGet(e) {
       Logger.log("Email: " + e.parameter.email)
       Logger.log("Password: " + e.parameter.password)
       
+      // Get spreadsheet and sheets here
+      var spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
+      var sheetUsers = spreadsheet.getSheetByName("Users")
+      
       if (!sheetUsers) {
         var response = ContentService.createTextOutput(
           JSON.stringify({
@@ -50,8 +60,9 @@ function doGet(e) {
         
         response.setHeaders({
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Accept',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
+          'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization',
+          'Access-Control-Max-Age': '86400',
         })
         
         return response
@@ -64,17 +75,15 @@ function doGet(e) {
       
       result.setHeaders({
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Accept',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
+        'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization',
+        'Access-Control-Max-Age': '86400',
       })
       
       return result
     }
 
-    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
-    var sheetPostingan = spreadsheet.getSheetByName("Posting")
-    var sheetUsers = spreadsheet.getSheetByName("Users")
-    var sheetLikes = spreadsheet.getSheetByName("Likes")
+    // Spreadsheet and sheets already initialized at the beginning
 
     // Create Likes sheet if it doesn't exist
     if (!sheetLikes) {
@@ -799,13 +808,16 @@ function doOptions(e) {
   
   var response = ContentService.createTextOutput("")
     .setMimeType(ContentService.MimeType.TEXT)
-    .setHeaders({
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
-      'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control',
-      'Access-Control-Max-Age': '86400',
-      'Cache-Control': 'no-cache',
-    })
+  
+  response.setHeaders({
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE, HEAD',
+    'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, X-Requested-With',
+    'Access-Control-Max-Age': '86400',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  })
   
   Logger.log("OPTIONS response sent")
   return response
