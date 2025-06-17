@@ -24,7 +24,20 @@ function handleRequest(e) {
     output.setMimeType(ContentService.MimeType.JSON);
     
     // Get action from parameter
-    var action = e.parameter.action || e.postData?.contents ? JSON.parse(e.postData.contents).action : "test";
+    var action = "";
+    
+    if (e.parameter && e.parameter.action) {
+      action = e.parameter.action;
+    } else if (e.postData && e.postData.contents) {
+      try {
+        var postData = JSON.parse(e.postData.contents);
+        action = postData.action || "test";
+      } catch (parseError) {
+        action = "test";
+      }
+    } else {
+      action = "test";
+    }
     
     Logger.log("Request action: " + action);
     Logger.log("Request parameters: " + JSON.stringify(e.parameter));
@@ -74,8 +87,25 @@ function handleRequest(e) {
 
 function handleLogin(e) {
   try {
-    var email = e.parameter.email || (e.postData?.contents ? JSON.parse(e.postData.contents).email : "");
-    var password = e.parameter.password || (e.postData?.contents ? JSON.parse(e.postData.contents).password : "");
+    var email = "";
+    var password = "";
+    
+    // Get data from GET parameters
+    if (e.parameter && e.parameter.email) {
+      email = e.parameter.email;
+      password = e.parameter.password || "";
+    }
+    
+    // Get data from POST body if not found in parameters
+    if (!email && e.postData && e.postData.contents) {
+      try {
+        var postData = JSON.parse(e.postData.contents);
+        email = postData.email || "";
+        password = postData.password || "";
+      } catch (parseError) {
+        Logger.log("Parse error: " + parseError.toString());
+      }
+    }
     
     Logger.log("Login attempt for: " + email);
     
@@ -134,7 +164,18 @@ function handleLogin(e) {
 
 function handleRegister(e) {
   try {
-    var data = e.postData?.contents ? JSON.parse(e.postData.contents) : e.parameter;
+    var data = {};
+    
+    // Get data from POST body
+    if (e.postData && e.postData.contents) {
+      try {
+        data = JSON.parse(e.postData.contents);
+      } catch (parseError) {
+        data = e.parameter || {};
+      }
+    } else {
+      data = e.parameter || {};
+    }
     
     var email = data.email;
     var username = data.username;
@@ -262,7 +303,18 @@ function handleGetPosts() {
 
 function handleCreatePost(e) {
   try {
-    var data = e.postData?.contents ? JSON.parse(e.postData.contents) : e.parameter;
+    var data = {};
+    
+    // Get data from POST body
+    if (e.postData && e.postData.contents) {
+      try {
+        data = JSON.parse(e.postData.contents);
+      } catch (parseError) {
+        data = e.parameter || {};
+      }
+    } else {
+      data = e.parameter || {};
+    }
     
     var idUsers = data.idUsers;
     var judul = data.judul || "";
@@ -307,7 +359,18 @@ function handleCreatePost(e) {
 
 function handleLikeDislike(e) {
   try {
-    var data = e.postData?.contents ? JSON.parse(e.postData.contents) : e.parameter;
+    var data = {};
+    
+    // Get data from POST body
+    if (e.postData && e.postData.contents) {
+      try {
+        data = JSON.parse(e.postData.contents);
+      } catch (parseError) {
+        data = e.parameter || {};
+      }
+    } else {
+      data = e.parameter || {};
+    }
     
     return { message: "Like/dislike berhasil" };
     
