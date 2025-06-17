@@ -43,7 +43,11 @@ export function middleware(request: NextRequest) {
         if (userData.role?.toLowerCase() !== "admin") {
           console.log("Non-admin user trying to access admin page, redirecting to dashboard")
           return NextResponse.redirect(new URL("/dashboard", request.url))
+        } else {
+          console.log("Admin user accessing admin page - allowing access")
         }
+      } else {
+        console.log("User accessing non-admin page - allowing access")
       }
       
     } catch (error) {

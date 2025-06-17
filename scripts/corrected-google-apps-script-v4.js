@@ -174,12 +174,20 @@ function handleLogin(e) {
           Logger.log("Direct password match");
         }
         // Try base64 encoding (manual implementation)
-        else if (userPassword === base64Encode(password)) {
-          isPasswordValid = true;
-          Logger.log("Base64 encoded password match");
+        else {
+          try {
+            var encodedPassword = base64Encode(password);
+            if (userPassword === encodedPassword) {
+              isPasswordValid = true;
+              Logger.log("Base64 encoded password match");
+            }
+          } catch (e) {
+            Logger.log("Base64 encode failed: " + e.toString());
+          }
         }
-        // Try decode base64 input (manual implementation) - hanya jika password terlihat seperti base64
-        else if (password.length > 0 && password.match(/^[A-Za-z0-9+/]+={0,2}$/)) {
+        
+        // Try decode base64 input if it looks like base64
+        if (!isPasswordValid && password.length > 0 && password.match(/^[A-Za-z0-9+/]+={0,2}$/)) {
           try {
             var decodedPassword = base64Decode(password);
             if (userPassword === decodedPassword) {

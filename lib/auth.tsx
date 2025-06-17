@@ -82,10 +82,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTimeout(() => {
         if (userData.role?.toLowerCase() === "admin") {
           console.log("Redirecting to admin dashboard")
-          router.push("/admin")
+          window.location.href = "/admin"
         } else {
           console.log("Redirecting to user dashboard")
-          router.push("/dashboard")
+          window.location.href = "/dashboard"
         }
       }, 100)
 
