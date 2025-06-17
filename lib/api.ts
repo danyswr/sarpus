@@ -13,7 +13,8 @@ import {
 } from "./mock-api"
 
 // Helper untuk menentukan apakah menggunakan mock API atau real API
-const useMockAPI = () => API_URL === "YOUR_SCRIPT_ID_HERE" // Remove development check to use real API
+// Temporarily use mock API to avoid CORS issues during development
+const useMockAPI = () => true // Change to false when Google Apps Script CORS is properly configured
 
 // Simple password hashing function
 async function hashPassword(password: string): Promise<string> {
@@ -91,6 +92,7 @@ export async function registerUser(userData: {
   try {
     const isMock = useMockAPI()
     if (isMock) {
+      console.log('Using mock API for registration')
       return await mockRegisterUser(userData)
     }
 
@@ -112,8 +114,10 @@ export async function registerUser(userData: {
 
     const response = await fetch(API_URL, {
       method: 'POST',
+      mode: 'cors',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
       body: JSON.stringify(payload),
     })
@@ -121,7 +125,7 @@ export async function registerUser(userData: {
     if (!response.ok) {
       const errorText = await response.text()
       console.error('Registration failed:', errorText)
-      throw new Error(`HTTP error! status: ${response.status}`)
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`)
     }
 
     const result = await response.json()
@@ -134,6 +138,12 @@ export async function registerUser(userData: {
     return result
   } catch (error) {
     console.error("Registration error:", error)
+    
+    // Provide more specific error messages
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      throw new Error("Network error: Unable to connect to registration service. Please check your internet connection or try again later.")
+    }
+    
     throw new Error("Registration error: " + (error instanceof Error ? error.message : String(error)))
   }
 }
