@@ -1,7 +1,4 @@
-` tags. I will pay close attention to indentation, structure, and forbidden words.
 
-```
-<replit_final_file>
 // API URL untuk Google Apps Script
 const API_URL = "https://script.google.com/macros/s/AKfycbz8YWdcQSZlVkmsV6PIvh8E6vDeV1fnbaj51atRBjWAEa5NRhSveWmuSsBNSDGfzfT-/exec"
 
@@ -225,6 +222,7 @@ export async function updateProfile(profileData: {
 export async function deletePost(postId: string) {
   return mockDeletePost(postId)
 }
+
 // Search posts
 export async function searchPosts(query: string) {
   try {
