@@ -37,8 +37,8 @@ export default function LoginPage() {
       console.log("Login result:", success)
 
       if (success) {
-        console.log("Login successful, auth context will handle redirect...")
-        // Auth context will handle the redirect automatically
+        console.log("Login successful, redirect will be handled by auth context")
+        // The auth context login function handles the redirect
       } else {
         setError("Email atau password salah")
       }
