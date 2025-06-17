@@ -36,10 +36,10 @@ export async function testConnection() {
 
     console.log("Testing connection to:", API_URL)
     
-    // Coba GET request biasa dulu
+    // Method 1: Try normal GET request with shorter timeout
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
       
       const response = await fetch(`${API_URL}?action=test&t=${Date.now()}`, {
         method: "GET",
@@ -58,42 +58,68 @@ export async function testConnection() {
         const result = await response.json()
         console.log("Test response:", result)
         return { message: "Connection successful", status: "ok" }
+      } else if (response.status === 302 || response.status === 301) {
+        // Google Apps Script sometimes returns redirects
+        console.log("Received redirect, assuming connection is working")
+        return { message: "Connection successful (redirect)", status: "ok" }
       } else {
-        throw new Error('Test request failed')
+        throw new Error(`Test request failed with status: ${response.status}`)
       }
     } catch (error) {
-      console.log('Normal test failed, trying no-cors mode:', error)
+      console.log('Normal test failed:', error)
       
-      // Fallback dengan no-cors mode
+      // Method 2: Try with no-cors mode
       try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout for no-cors
+        
         const response = await fetch(`${API_URL}?action=test&t=${Date.now()}`, {
           method: "GET",
           mode: 'no-cors',
+          signal: controller.signal,
         })
+        
+        clearTimeout(timeoutId)
         
         console.log("Test response type (no-cors):", response.type)
         
-        // Jika no-cors berhasil, asumsikan koneksi OK
+        // In no-cors mode, we can't read the response, but if it doesn't error, connection likely works
         if (response.type === 'opaque') {
-          console.log("Connection successful (no-cors mode)")
+          console.log("Connection appears successful (no-cors mode)")
           return { message: "Connection successful (no-cors)", status: "ok" }
         }
         
         throw new Error('No-cors test failed')
       } catch (noCorsError) {
         console.log('Both normal and no-cors tests failed:', noCorsError)
-        throw new Error("Unable to reach Google Apps Script")
+        
+        // Method 3: Try a simple HEAD request
+        try {
+          const headResponse = await fetch(API_URL, {
+            method: "HEAD",
+            mode: 'no-cors',
+          })
+          
+          if (headResponse.type === 'opaque') {
+            console.log("HEAD request successful, assuming connection works")
+            return { message: "Connection successful (HEAD)", status: "ok" }
+          }
+        } catch (headError) {
+          console.log('HEAD request also failed:', headError)
+        }
+        
+        throw new Error("Unable to reach Google Apps Script URL")
       }
     }
   } catch (error) {
     console.error("Connection test failed:", error)
     
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error("Connection timeout. Please check your internet connection.")
+      throw new Error("Connection timeout. Google Apps Script mungkin sedang lambat atau URL salah.")
     }
     
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      throw new Error("Unable to reach Google Apps Script. Please check the URL or try again later.")
+      throw new Error("Tidak dapat mengakses Google Apps Script. Pastikan:\n1. URL sudah benar\n2. Web app sudah di-deploy\n3. Access setting: 'Anyone'\n4. Koneksi internet stabil")
     }
     
     throw new Error("Connection test failed: " + (error instanceof Error ? error.message : String(error)))
@@ -114,9 +140,21 @@ export async function loginUser(email: string, password: string) {
     // Hash password untuk konsistensi dengan spreadsheet
     const hashedPassword = btoa(password)
 
-    // Coba GET request dengan parameter di URL (paling kompatibel dengan Google Apps Script)
-    console.log('Login with GET request')
+    // First, try to test connection
+    console.log('Testing connection before login...')
     try {
+      await testConnection()
+      console.log('Connection test successful')
+    } catch (connectionError) {
+      console.log('Connection test failed, but continuing with login:', connectionError)
+    }
+
+    // Method 1: Try GET request with parameters
+    console.log('Trying GET request for login')
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+      
       const getUrl = `${API_URL}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(hashedPassword)}&t=${Date.now()}`
       
       const getResponse = await fetch(getUrl, {
@@ -125,7 +163,10 @@ export async function loginUser(email: string, password: string) {
           "Accept": "application/json",
           "Cache-Control": "no-cache",
         },
+        signal: controller.signal,
       })
+      
+      clearTimeout(timeoutId)
       
       if (getResponse.ok) {
         const result = await getResponse.json()
@@ -148,87 +189,95 @@ export async function loginUser(email: string, password: string) {
           website: result.website || "",
         }
       } else {
-        throw new Error('GET request failed')
+        throw new Error(`GET request failed with status: ${getResponse.status}`)
       }
     } catch (getError) {
-      console.log('GET request failed:', getError)
+      console.log('GET login failed, trying POST:', getError)
       
-      // Fallback: gunakan POST dengan no-cors mode
-      console.log('Login with POST request using no-cors mode')
+      // Method 2: Try POST request with timeout
       try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+        
         const payload = {
           action: 'login',
           email: email,
           password: hashedPassword,
         }
 
-        console.log('Login payload:', payload)
+        console.log('Fallback POST login payload:', payload)
 
         const postResponse = await fetch(API_URL, {
           method: "POST",
-          mode: 'no-cors',
           headers: {
             "Content-Type": "application/json",
+            "Accept": "application/json",
           },
           body: JSON.stringify(payload),
+          signal: controller.signal,
         })
 
-        console.log('Login POST response status:', postResponse.status)
-        console.log('Login POST response type:', postResponse.type)
-
-        // Karena no-cors mode, kita tidak bisa membaca response
-        // Coba verifikasi dengan GET request
-        if (postResponse.type === 'opaque') {
-          console.log('POST sent, now trying GET to verify login')
+        clearTimeout(timeoutId)
+        
+        console.log('POST Login response status:', postResponse.status)
+        
+        if (postResponse.ok) {
+          const result = await postResponse.json()
+          console.log('POST Login response:', result)
           
-          try {
-            const verifyUrl = `${API_URL}?action=test&t=${Date.now()}`
-            const verifyResponse = await fetch(verifyUrl, {
-              method: "GET",
-              headers: {
-                "Accept": "application/json",
-              },
-            })
-            
-            if (verifyResponse.ok) {
-              const verifyResult = await verifyResponse.json()
-              console.log('Verify response:', verifyResult)
-            }
-          } catch (verifyError) {
-            console.log('GET login failed:', verifyError)
+          if (result.error) {
+            throw new Error(result.error)
           }
           
-          // Asumsikan berhasil karena POST tidak error
-          console.log('Assuming login successful due to no-cors limitations')
           return {
-            message: "Login berhasil (mode terbatas)",
-            idUsers: "USER_TEMP",
-            role: "user",
-            username: email.split('@')[0],
-            email: email,
-            nim: "",
-            jurusan: "",
-            bio: "",
-            location: "",
-            website: "",
+            message: "Login berhasil",
+            idUsers: result.idUsers || "USER_" + Date.now(),
+            role: result.role || "user", 
+            username: result.username || email.split('@')[0],
+            email: result.email || email,
+            nim: result.nim || "",
+            jurusan: result.jurusan || "",
+            bio: result.bio || "",
+            location: result.location || "",
+            website: result.website || "",
           }
+        } else {
+          throw new Error(`POST request failed with status: ${postResponse.status}`)
         }
-
-        throw new Error('POST request failed')
       } catch (postError) {
-        console.log('POST also failed:', postError)
-        throw new Error("Tidak dapat terhubung ke server login")
+        console.log('Both GET and POST failed:', postError)
+        
+        // Check if it's a network error
+        if (postError instanceof TypeError && postError.message === 'Failed to fetch') {
+          throw new Error("Tidak dapat terhubung ke Google Apps Script. Pastikan:\n1. URL Google Apps Script sudah benar\n2. Web app sudah di-deploy dengan 'Anyone' access\n3. Koneksi internet stabil")
+        }
+        
+        if (postError instanceof Error && postError.name === 'AbortError') {
+          throw new Error("Request timeout. Google Apps Script mungkin sedang lambat.")
+        }
+        
+        throw new Error("Login gagal: " + (postError instanceof Error ? postError.message : String(postError)))
       }
     }
     
   } catch (error) {
     console.error("Login error:", error)
     
+    // More specific error handling
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      throw new Error("Tidak dapat terhubung ke server. Periksa koneksi internet Anda.")
+      throw new Error("Tidak dapat terhubung ke server. Periksa:\n1. URL Google Apps Script\n2. Deploy settings (Anyone access)\n3. Koneksi internet")
     }
     
-    throw new Error("Login error: " + (error instanceof Error ? error.message : String(error)))
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error("Request timeout. Coba lagi dalam beberapa saat.")
+    }
+    
+    // Pass through existing error messages
+    if (error instanceof Error) {
+      throw error
+    }
+    
+    throw new Error("Login error: " + String(error))
   }
 }
 
