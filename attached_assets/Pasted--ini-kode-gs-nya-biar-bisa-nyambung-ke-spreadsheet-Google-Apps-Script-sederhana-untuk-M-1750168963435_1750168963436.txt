@@ -1,0 +1,87 @@
+// ini kode.gs nya biar bisa nyambung ke spreadsheet
+
+/**
+ * Google Apps Script sederhana untuk Mahasiswa Feedback Platform
+ * Copy kode ini ke Google Apps Script dan deploy sebagai web app
+ * 
+ * PENTING: 
+ * 1. Deploy sebagai web app dengan "Execute as: Me" 
+ * 2. "Who has access: Anyone"
+ * 3. Pastikan spreadsheet memiliki sheet: Users, Posting, Likes
+ */
+
+function doGet(e) {
+  return handleRequest(e);
+}
+
+function doPost(e) {
+  return handleRequest(e);
+}
+
+function handleRequest(e) {
+  try {
+    // Set CORS headers
+    var output = ContentService.createTextOutput();
+    output.setMimeType(ContentService.MimeType.JSON);
+    
+    // Get action from parameter
+    var action = "";
+    
+    if (e.parameter && e.parameter.action) {
+      action = e.parameter.action;
+    } else if (e.postData && e.postData.contents) {
+      try {
+        var postData = JSON.parse(e.postData.contents);
+        action = postData.action || "test";
+      } catch (parseError) {
+        action = "test";
+      }
+    } else {
+      action = "test";
+    }
+    
+    Logger.log("Request action: " + action);
+    Logger.log("Request parameters: " + JSON.stringify(e.parameter));
+    
+    var result = {};
+    
+    switch(action) {
+      case "test":
+        result = { message: "Connection successful", timestamp: new Date().toISOString(), status: "ok" };
+        break;
+        
+      case "login":
+        result = handleLogin(e);
+        break;
+        
+      case "register":
+        result = handleRegister(e);
+        break;
+        
+      case "getPosts":
+        result = handleGetPosts();
+        break;
+        
+      case "createPost":
+        result = handleCreatePost(e);
+        break;
+        
+      case "likeDislike":
+        result = handleLikeDislike(e);
+        break;
+        
+      default:
+        result = { error: "Action tidak dikenal: " + action };
+    }
+    
+    output.setContent(JSON.stringify(result));
+    return output;
+    
+  } catch (error) {
+    Logger.log("Error: " + error.toString());
+    var errorOutput = ContentService.createTextOutput();
+    errorOutput.setMimeType(ContentService.MimeType.JSON);
+    errorOutput.setContent(JSON.stringify({ error: error.toString() }));
+    return errorOutput;
+  }
+}
