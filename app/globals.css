@@ -1,0 +1,166 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 0%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 0%;
+  --primary: 47 100% 50%;
+  --primary-foreground: 0 0% 0%;
+  --secondary: 180 100% 50%;
+  --secondary-foreground: 0 0% 0%;
+  --accent: 330 100% 70%;
+  --accent-foreground: 0 0% 0%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 45%;
+  --destructive: 0 100% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 90%;
+  --input: 0 0% 90%;
+  --ring: 47 100% 50%;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: 0 0% 10%;
+  --foreground: 0 0% 100%;
+  --card: 0 0% 15%;
+  --card-foreground: 0 0% 100%;
+  --popover: 0 0% 15%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 47 100% 50%;
+  --primary-foreground: 0 0% 0%;
+  --secondary: 180 100% 50%;
+  --secondary-foreground: 0 0% 0%;
+  --accent: 330 100% 70%;
+  --accent-foreground: 0 0% 0%;
+  --muted: 0 0% 20%;
+  --muted-foreground: 0 0% 70%;
+  --destructive: 0 100% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 30%;
+  --input: 0 0% 30%;
+  --ring: 47 100% 50%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-poppins), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+      Arial, sans-serif;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-bold;
+  }
+}
+
+@layer components {
+  .card-shadow {
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.25);
+  }
+
+  .highlight-box {
+    @apply px-2 py-1 text-black;
+    display: inline-block;
+  }
+
+  .highlight-cyan {
+    @apply bg-cyan-400;
+  }
+
+  .highlight-pink {
+    @apply bg-pink-400;
+  }
+
+  .card-yellow {
+    @apply bg-yellow-400 text-black border-2 border-black rounded-xl;
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.25);
+  }
+
+  .card-cyan {
+    @apply bg-cyan-400 text-black border-2 border-black rounded-xl;
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.25);
+  }
+
+  .card-pink {
+    @apply bg-pink-400 text-black border-2 border-black rounded-xl;
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.25);
+  }
+
+  .card-green {
+    @apply bg-green-400 text-black border-2 border-black rounded-xl;
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.25);
+  }
+
+  .card-purple {
+    @apply bg-purple-400 text-black border-2 border-black rounded-xl;
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.25);
+  }
+
+  .card-orange {
+    @apply bg-orange-400 text-black border-2 border-black rounded-xl;
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.25);
+  }
+
+  .btn-primary {
+    @apply bg-yellow-400 text-black font-bold py-2 px-4 rounded-lg border-2 border-black hover:brightness-95 transition-all;
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.25);
+  }
+
+  .btn-outline {
+    @apply bg-white text-black font-bold py-2 px-4 rounded-lg border-2 border-black hover:bg-gray-100 transition-all;
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.25);
+  }
+
+  .btn-icon {
+    @apply flex items-center justify-center gap-2;
+  }
+
+  .platform-badge {
+    @apply bg-cyan-400 text-black font-bold py-2 px-4 rounded-full border-2 border-black flex items-center justify-center gap-2 w-fit mx-auto;
+  }
+
+  .section-title {
+    @apply text-5xl md:text-6xl font-black mb-0;
+  }
+
+  .section-subtitle {
+    @apply text-4xl md:text-5xl font-black text-yellow-400 mb-2;
+  }
+
+  .pink-underline {
+    @apply bg-pink-400 h-2 w-32 mx-auto mb-6;
+  }
+
+  .stat-card {
+    @apply p-8 flex flex-col items-center justify-center;
+  }
+
+  .stat-icon {
+    @apply bg-white p-4 rounded-lg border-2 border-black mb-6 inline-flex;
+  }
+
+  .stat-number {
+    @apply text-5xl font-black mb-2;
+  }
+
+  .stat-label {
+    @apply font-bold uppercase;
+  }
+
+  .input-search {
+    @apply w-full px-4 py-3 rounded-lg border-2 border-black focus:outline-none focus:ring-2 focus:ring-yellow-400;
+  }
+}
