@@ -13,8 +13,8 @@ import {
 } from "./mock-api"
 
 // Helper untuk menentukan apakah menggunakan mock API atau real API
-// Temporarily use mock API to avoid CORS issues during development
-const useMockAPI = () => true // Change to false when Google Apps Script CORS is properly configured
+// Now using real Google Apps Script API
+const useMockAPI = () => false // Using real Google Apps Script
 
 // Simple password hashing function
 async function hashPassword(password: string): Promise<string> {
@@ -57,6 +57,9 @@ export async function loginUser(email: string, password: string) {
       return await mockLoginUser(email, password)
     }
 
+    // Hash password to match what's stored in spreadsheet
+    const hashedPassword = btoa(password)
+
     const response = await fetch(`${API_URL}`, {
       method: "POST",
       headers: {
@@ -65,7 +68,7 @@ export async function loginUser(email: string, password: string) {
       body: JSON.stringify({
         action: "login",
         email,
-        password,
+        password: hashedPassword,
       }),
     })
 
@@ -73,7 +76,34 @@ export async function loginUser(email: string, password: string) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    return await response.json()
+    const result = await response.json()
+    
+    // Handle the Google Apps Script response format
+    if (result.error) {
+      throw new Error(result.error)
+    }
+    
+    // If user found, verify password client-side since GAS returns hashed password
+    if (result.hashedPassword) {
+      if (result.hashedPassword === hashedPassword) {
+        return {
+          message: "Login berhasil",
+          idUsers: result.idUsers,
+          role: result.role,
+          username: result.username,
+          email: result.email,
+          nim: result.nim,
+          jurusan: result.jurusan,
+          bio: result.bio,
+          location: result.location,
+          website: result.website,
+        }
+      } else {
+        throw new Error("Password salah")
+      }
+    }
+    
+    return result
   } catch (error) {
     console.error("Login error:", error)
     throw new Error("Login error: " + (error instanceof Error ? error.message : String(error)))
@@ -92,7 +122,6 @@ export async function registerUser(userData: {
   try {
     const isMock = useMockAPI()
     if (isMock) {
-      console.log('Using mock API for registration')
       return await mockRegisterUser(userData)
     }
 
