@@ -18,3 +18,15 @@ externalPort = 3001
 [[ports]]
 localPort = 3002
 externalPort = 3002
+
+[workflows]
+runButton = "Start Development Server"
+
+[[workflows.workflow]]
+name = "Start Development Server"
+author = 43939986
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"

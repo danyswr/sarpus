@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { Navbar } from "@/components/navbar"
+import type React from "react"
+import { useState, useEffect } from "react"
+import { getPosts, likeDislikePost, deletePost, searchPosts } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
-import { getPosts } from "@/lib/api"
-import { Search, TrendingUp, Hash } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface Post {
   idUsers: string
@@ -15,137 +16,201 @@ interface Post {
   deskripsi: string
   like: number
   dislike: number
+  imageUrl?: string
 }
 
 export default function ExplorePage() {
-  const { user, isLoading: authLoading } = useAuth()
   const [posts, setPosts] = useState<Post[]>([])
-  const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(true)
-  const router = useRouter()
+  const [error, setError] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
+  const { user } = useAuth()
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login")
-    }
-  }, [user, authLoading, router])
-
-  useEffect(() => {
-    const fetchPosts = async () => {
-      try {
-        const data = await getPosts()
-        // Sort by engagement (likes) for explore page
-        const sortedPosts = data.sort((a: Post, b: Post) => b.like - a.like)
-        setPosts(sortedPosts)
-      } catch (error) {
-        console.error("Error fetching posts:", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchPosts()
+    loadPosts()
   }, [])
 
-  const filteredPosts = posts.filter(
-    (post) =>
-      post.deskripsi.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.judul.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
-
-  if (authLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>
+  const loadPosts = async () => {
+    try {
+      setIsLoading(true)
+      const data = await getPosts()
+      if (data.error) {
+        throw new Error(data.error)
+      }
+      setPosts(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error("Error loading posts:", err)
+      setError(err instanceof Error ? err.message : "Failed to load posts")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  if (!user) {
-    return null
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      loadPosts()
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      const data = await searchPosts(searchQuery)
+      setPosts(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error("Error searching posts:", err)
+      setError(err instanceof Error ? err.message : "Failed to search posts")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleLikeDislike = async (idPostingan: string, type: "like" | "dislike") => {
+    if (!user) return
+
+    try {
+      await likeDislikePost({
+        idPostingan,
+        idUsers: user.idUsers,
+        type,
+      })
+      loadPosts() // Reload posts to get updated counts
+    } catch (err) {
+      console.error("Error updating like/dislike:", err)
+    }
+  }
+
+  const handleDelete = async (idPostingan: string) => {
+    if (!user) return
+
+    try {
+      await deletePost({
+        idPostingan,
+        idUsers: user.idUsers,
+      })
+      loadPosts() // Reload posts after deletion
+    } catch (err) {
+      console.error("Error deleting post:", err)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-12 px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center">Loading posts...</div>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="flex min-h-screen bg-white">
-      <Navbar />
+    <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-black mb-4">Explore Posts</h1>
+          <p className="text-gray-600">Discover what others are sharing</p>
+        </div>
 
-      <div className="flex-1 max-w-2xl mx-auto border-x border-gray-200 min-h-screen">
-        {/* Sticky Header with Search */}
-        <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-gray-200 p-4 z-40">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+        {/* Search Bar */}
+        <div className="mb-6">
+          <div className="flex gap-2">
             <input
               type="text"
-              placeholder="Cari postingan..."
+              placeholder="Search posts..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-gray-100 rounded-full border-none outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all"
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              className="flex-1 px-4 py-2 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFD600]"
             />
+            <Button 
+              onClick={handleSearch}
+              className="btn-primary"
+            >
+              Search
+            </Button>
+            <Button 
+              onClick={loadPosts}
+              variant="outline"
+              className="border-2 border-black"
+            >
+              Show All
+            </Button>
           </div>
         </div>
 
-        {/* Trending Section */}
-        <div className="border-b border-gray-200 p-4">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" />
-            Trending
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gradient-to-r from-yellow-400 to-orange-400 p-4 rounded-xl text-black">
-              <div className="flex items-center gap-2 mb-2">
-                <Hash className="w-4 h-4" />
-                <span className="font-bold">MahasiswaVoice</span>
-              </div>
-              <p className="text-sm opacity-80">1,234 posts</p>
-            </div>
-            <div className="bg-gradient-to-r from-cyan-400 to-blue-400 p-4 rounded-xl text-black">
-              <div className="flex items-center gap-2 mb-2">
-                <Hash className="w-4 h-4" />
-                <span className="font-bold">KampusMerdeka</span>
-              </div>
-              <p className="text-sm opacity-80">856 posts</p>
-            </div>
-          </div>
-        </div>
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-        {/* Posts */}
-        <div>
-          {isLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-              <p className="mt-2 text-gray-500">Loading posts...</p>
-            </div>
-          ) : filteredPosts.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <Search className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <h3 className="text-lg font-medium mb-2">{searchQuery ? "Tidak ada hasil" : "Belum ada post"}</h3>
-              <p>
-                {searchQuery
-                  ? `Tidak ditemukan post yang mengandung "${searchQuery}"`
-                  : "Belum ada post untuk dijelajahi"}
-              </p>
+        <div className="space-y-6">
+          {posts.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500">No posts found</p>
             </div>
           ) : (
-            filteredPosts.map((post) => (
-              <article
-                key={post.idPostingan}
-                className="border-b border-gray-200 p-4 hover:bg-gray-50/50 transition-colors"
-              >
-                <div className="flex gap-3">
-                  <div className="w-12 h-12 bg-pink-400 rounded-full flex items-center justify-center font-bold text-black flex-shrink-0">
-                    U
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-gray-900">User</span>
-                      <span className="text-gray-500">@user{post.idUsers.slice(-4)}</span>
-                      <span className="text-gray-500">·</span>
-                      <span className="text-gray-500">{new Date(post.timestamp).toLocaleDateString("id-ID")}</span>
+            posts.map((post) => (
+              <Card key={post.idPostingan} className="border-2 border-black card-shadow">
+                <CardHeader>
+                  <CardTitle className="flex justify-between items-center">
+                    <span>{post.judul}</span>
+                    <div className="text-right">
+                      <span className="text-sm text-gray-500 block">
+                        {new Date(post.timestamp).toLocaleDateString()}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        User: {post.idUsers}
+                      </span>
                     </div>
-                    <p className="text-gray-900 mb-3 whitespace-pre-wrap break-words">{post.deskripsi}</p>
-                    <div className="flex items-center gap-4 text-gray-500">
-                      <span className="text-sm">{post.like} likes</span>
-                      <span className="text-sm">{post.dislike} dislikes</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="mb-4">{post.deskripsi}</p>
+                  {post.imageUrl && (
+                    <div className="mb-4">
+                      <img 
+                        src={post.imageUrl} 
+                        alt="Post image" 
+                        className="max-w-full h-auto rounded-lg border-2 border-black"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none'
+                        }}
+                      />
                     </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleLikeDislike(post.idPostingan, "like")}
+                        className="border-2 border-black"
+                      >
+                        👍 {post.like}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleLikeDislike(post.idPostingan, "dislike")}
+                        className="border-2 border-black"
+                      >
+                        👎 {post.dislike}
+                      </Button>
+                    </div>
+                    {user && (user.role === "admin" || user.idUsers === post.idUsers) && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDelete(post.idPostingan)}
+                        className="border-2 border-black"
+                      >
+                        Delete
+                      </Button>
+                    )}
                   </div>
-                </div>
-              </article>
+                </CardContent>
+              </Card>
             ))
           )}
         </div>

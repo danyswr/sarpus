@@ -64,12 +64,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(response.error)
       }
 
+      // Verify password hash if hashedPassword is provided
+      if (response.hashedPassword) {
+        // Simple hash verification (you might want to use a proper library like bcrypt)
+        const hashedInput = btoa(password) // Simple base64 encoding for demo
+        if (hashedInput !== response.hashedPassword) {
+          throw new Error("Password salah")
+        }
+      }
+
       // Create user object from response
       const userData: User = {
         idUsers: response.idUsers,
         username: response.username,
         email: response.email,
-        role: response.role || "user", // Default to user if role is not provided
+        role: response.role || "user",
         nim: response.nim || "",
         jurusan: response.jurusan || "",
       }
@@ -81,6 +90,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Set cookies for middleware
       document.cookie = `auth-token=authenticated; path=/; max-age=86400`
       document.cookie = `user-data=${encodeURIComponent(JSON.stringify(userData))}; path=/; max-age=86400`
+
+      // Redirect based on role
+      if (userData.role.toLowerCase() === "admin") {
+        router.push("/admin")
+      } else {
+        router.push("/dashboard")
+      }
 
       return true
     } catch (error) {

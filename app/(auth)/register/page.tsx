@@ -55,10 +55,13 @@ export default function RegisterPage() {
     setIsLoading(true)
 
     try {
+      // Hash password before sending
+      const hashedPassword = btoa(formData.password) // Simple base64 encoding for demo
+      
       const response = await registerUser({
         email: formData.email,
         username: formData.username,
-        password: formData.password, // Store as plain text for demo
+        password: hashedPassword,
         nim: formData.nim,
         gender: formData.gender,
         jurusan: formData.jurusan,

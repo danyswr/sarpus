@@ -1,5 +1,5 @@
 // API URL untuk Google Apps Script
-const API_URL = "YOUR_SCRIPT_ID_HERE" // Ganti dengan URL Google Apps Script Anda
+const API_URL = "https://script.google.com/macros/s/AKfycbz8YWdcQSZlVkmsV6PIvh8E6vDeV1fnbaj51atRBjWAEa5NRhSveWmuSsBNSDGfzfT-/exec"
 
 // Import mock API functions
 import {
@@ -149,6 +149,13 @@ export async function createPost(postData: {
       return await mockCreatePost(postData)
     }
 
+    // If imageUrl is provided, make sure it's from the Google Drive folder
+    let processedImageUrl = postData.imageUrl
+    if (processedImageUrl && !processedImageUrl.includes("drive.google.com")) {
+      // Convert to Google Drive shareable link format
+      processedImageUrl = `https://drive.google.com/file/d/${processedImageUrl}/view?usp=sharing`
+    }
+
     const response = await fetch(`${API_URL}`, {
       method: "POST",
       headers: {
@@ -157,6 +164,7 @@ export async function createPost(postData: {
       body: JSON.stringify({
         action: "createPost",
         ...postData,
+        imageUrl: processedImageUrl,
       }),
     })
 
@@ -232,5 +240,66 @@ export async function deletePost(data: { idPostingan: string; idUsers: string })
   } catch (error) {
     console.error("Delete post error:", error)
     throw new Error("Delete post error: " + (error instanceof Error ? error.message : String(error)))
+  }
+}
+
+// Search posts
+export async function searchPosts(query: string) {
+  try {
+    const posts = await getPosts()
+    if (posts.error) {
+      throw new Error(posts.error)
+    }
+
+    // Filter posts based on query
+    const filteredPosts = posts.filter((post: any) => 
+      post.judul?.toLowerCase().includes(query.toLowerCase()) ||
+      post.deskripsi?.toLowerCase().includes(query.toLowerCase())
+    )
+
+    return filteredPosts
+  } catch (error) {
+    console.error("Search posts error:", error)
+    throw new Error("Search posts error: " + (error instanceof Error ? error.message : String(error)))
+  }
+}
+
+// Update user profile
+export async function updateUserProfile(userData: {
+  idUsers: string
+  username?: string
+  email?: string
+  nim?: string
+  jurusan?: string
+  bio?: string
+  location?: string
+  website?: string
+}) {
+  try {
+    const isMock = useMockAPI()
+    if (isMock) {
+      // Mock update for development
+      return { message: "Profile updated successfully (mock)" }
+    }
+
+    const response = await fetch(`${API_URL}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "updateProfile",
+        ...userData,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error("Update profile error:", error)
+    throw new Error("Update profile error: " + (error instanceof Error ? error.message : String(error)))
   }
 }
