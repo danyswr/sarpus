@@ -78,6 +78,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("Login successful, redirecting...")
       console.log("User role for redirect:", userData.role)
 
+      // Automatic redirect after successful login
+      setTimeout(() => {
+        if (userData.role?.toLowerCase() === "admin") {
+          console.log("Redirecting to admin dashboard")
+          router.push("/admin")
+        } else {
+          console.log("Redirecting to user dashboard")
+          router.push("/dashboard")
+        }
+      }, 100)
+
       return true
     } catch (error) {
       console.error("Login error:", error)

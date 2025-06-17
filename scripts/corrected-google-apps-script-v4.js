@@ -178,8 +178,8 @@ function handleLogin(e) {
           isPasswordValid = true;
           Logger.log("Base64 encoded password match");
         }
-        // Try decode base64 input (manual implementation)
-        else {
+        // Try decode base64 input (manual implementation) - hanya jika password terlihat seperti base64
+        else if (password.length > 0 && password.match(/^[A-Za-z0-9+/]+={0,2}$/)) {
           try {
             var decodedPassword = base64Decode(password);
             if (userPassword === decodedPassword) {

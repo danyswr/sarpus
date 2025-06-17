@@ -90,7 +90,6 @@ export async function loginUser(email: string, password: string) {
       password: password,
     }
 
-    console.log("Trying POST with JSON")
     console.log("POST login payload:", loginData)
 
     const response = await makeRequest(API_URL, {
@@ -101,36 +100,10 @@ export async function loginUser(email: string, password: string) {
       body: JSON.stringify(loginData),
     })
 
-    console.log("JSON POST Login response:", response)
+    console.log("POST Login response:", response)
     
     if (response && !response.error) {
       return response
-    }
-
-    // Method 3: Try POST with form data as fallback
-    try {
-      console.log("JSON POST failed, trying form data")
-      const formData = new FormData()
-      formData.append('action', 'login')
-      formData.append('email', email)
-      formData.append('password', password)
-
-      const formResponse = await fetch(API_URL, {
-        method: 'POST',
-        mode: 'cors',
-        credentials: 'omit',
-        body: formData,
-      })
-
-      if (formResponse.ok) {
-        const formResult = await formResponse.json()
-        if (formResult && !formResult.error) {
-          console.log("Form POST Login response:", formResult)
-          return formResult
-        }
-      }
-    } catch (formError) {
-      console.log("Form POST also failed:", formError)
     }
 
     // If we reach here, return the last response or error
@@ -141,11 +114,13 @@ export async function loginUser(email: string, password: string) {
     return { error: "Login failed: Unable to connect to server" }
 
   } catch (error) {
-    console.error("All login methods failed:", error)
+    console.error("Login failed:", error)
     
-    // Fallback: Use mock data if all methods fail
-    console.log("Using fallback mock login")
-    return mockLoginUser(email, password)
+    // Return specific error message instead of falling back to mock
+    if (error instanceof Error) {
+      return { error: error.message }
+    }
+    return { error: "Terjadi kesalahan saat login" }
   }
 }
 

@@ -37,24 +37,7 @@ export default function LoginPage() {
       if (success) {
         console.log("Login result:", success)
         console.log("Login successful, auth context will handle redirect...")
-
-        // Get fresh user data for redirect
-        const userStr = localStorage.getItem("user")
-        if (userStr) {
-          const userData = JSON.parse(userStr)
-          console.log("User data for redirect:", userData)
-
-          // Use setTimeout to ensure state is properly set
-          setTimeout(() => {
-            if (userData.role?.toLowerCase() === "admin") {
-              console.log("Redirecting to admin dashboard")
-              router.replace("/admin")
-            } else {
-              console.log("Redirecting to user dashboard")
-              router.replace("/dashboard")
-            }
-          }, 500) // Increased timeout for better reliability
-        }
+        // Auth context will handle the redirect automatically
       } else {
         setError("Email atau password salah")
       }
