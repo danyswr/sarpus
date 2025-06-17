@@ -88,22 +88,36 @@ export async function registerUser(userData: {
       return await mockRegisterUser(userData)
     }
 
-    const response = await fetch(`${API_URL}`, {
-      method: "POST",
+    console.log('Registering user:', userData)
+    const hashedPassword = await hashPassword(userData.password)
+
+    const payload = {
+      action: 'register',
+      email: userData.email,
+      username: userData.username,
+      password: hashedPassword,
+      nim: userData.nim,
+      jurusan: userData.jurusan,
+      gender: userData.gender || 'Male',
+    }
+
+    console.log('Registration payload:', payload)
+
+    const response = await fetch(API_URL, {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        action: "register",
-        ...userData,
-      }),
+      body: JSON.stringify(payload),
     })
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    return await response.json()
+    const result = await response.json()
+    console.log('Registration response:', result)
+    return result
   } catch (error) {
     console.error("Registration error:", error)
     throw new Error("Registration error: " + (error instanceof Error ? error.message : String(error)))

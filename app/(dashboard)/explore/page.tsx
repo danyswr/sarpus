@@ -1,12 +1,12 @@
-"use client"
+'use client'
 
-import type React from "react"
-import { useState, useEffect } from "react"
-import { getPosts, likeDislikePost, deletePost, searchPosts } from "@/lib/api"
-import { useAuth } from "@/lib/auth"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useState, useEffect } from 'react'
+import { useAuth } from '@/lib/auth'
+import { api } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Heart, MessageCircle, Share2, Trash2, Plus, Image as ImageIcon } from 'lucide-react'
+import { ImageUpload } from '@/components/image-upload'
 
 interface Post {
   idUsers: string
@@ -16,204 +16,234 @@ interface Post {
   deskripsi: string
   like: number
   dislike: number
+  username?: string
+  likedBy?: string[]
+  dislikedBy?: string[]
   imageUrl?: string
 }
 
 export default function ExplorePage() {
-  const [posts, setPosts] = useState<Post[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [searchQuery, setSearchQuery] = useState("")
   const { user } = useAuth()
+  const [posts, setPosts] = useState<Post[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [newPost, setNewPost] = useState({
+    judul: '',
+    deskripsi: '',
+    imageUrl: ''
+  })
 
   useEffect(() => {
-    loadPosts()
+    fetchPosts()
   }, [])
 
-  const loadPosts = async () => {
+  const fetchPosts = async () => {
     try {
-      setIsLoading(true)
-      const data = await getPosts()
-      if (data.error) {
-        throw new Error(data.error)
+      const fetchedPosts = await api.getPosts()
+      setPosts(fetchedPosts)
+    } catch (error) {
+      console.error('Error fetching posts:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreatePost = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user || !newPost.judul.trim() || !newPost.deskripsi.trim()) return
+
+    try {
+      const result = await api.createPost({
+        idUsers: user.idUsers,
+        judul: newPost.judul,
+        deskripsi: newPost.deskripsi,
+        imageUrl: newPost.imageUrl
+      })
+
+      if (result.message) {
+        setNewPost({ judul: '', deskripsi: '', imageUrl: '' })
+        setShowCreateForm(false)
+        fetchPosts() // Refresh posts
       }
-      setPosts(Array.isArray(data) ? data : [])
-    } catch (err) {
-      console.error("Error loading posts:", err)
-      setError(err instanceof Error ? err.message : "Failed to load posts")
-    } finally {
-      setIsLoading(false)
+    } catch (error) {
+      console.error('Error creating post:', error)
+      alert('Failed to create post')
     }
   }
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      loadPosts()
-      return
-    }
-
+  const handleImageUpload = async (file: File) => {
     try {
-      setIsLoading(true)
-      const data = await searchPosts(searchQuery)
-      setPosts(Array.isArray(data) ? data : [])
-    } catch (err) {
-      console.error("Error searching posts:", err)
-      setError(err instanceof Error ? err.message : "Failed to search posts")
-    } finally {
-      setIsLoading(false)
+      const result = await api.uploadImage(file)
+      if (result.imageUrl) {
+        setNewPost(prev => ({ ...prev, imageUrl: result.imageUrl }))
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error)
+      alert('Failed to upload image')
     }
   }
 
-  const handleLikeDislike = async (idPostingan: string, type: "like" | "dislike") => {
+  const handleLike = async (postId: string, type: 'like' | 'dislike') => {
     if (!user) return
 
     try {
-      await likeDislikePost({
-        idPostingan,
-        idUsers: user.idUsers,
-        type,
-      })
-      loadPosts() // Reload posts to get updated counts
-    } catch (err) {
-      console.error("Error updating like/dislike:", err)
+      await api.likePost(postId, user.idUsers, type)
+      fetchPosts() // Refresh posts to show updated counts
+    } catch (error) {
+      console.error('Error liking post:', error)
     }
   }
 
-  const handleDelete = async (idPostingan: string) => {
-    if (!user) return
+  const handleDelete = async (postId: string) => {
+    if (!user || !confirm('Are you sure you want to delete this post?')) return
 
     try {
-      await deletePost({
-        idPostingan,
-        idUsers: user.idUsers,
-      })
-      loadPosts() // Reload posts after deletion
-    } catch (err) {
-      console.error("Error deleting post:", err)
+      await api.deletePost(postId, user.idUsers)
+      fetchPosts() // Refresh posts
+    } catch (error) {
+      console.error('Error deleting post:', error)
+      alert('Failed to delete post')
     }
   }
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12 px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center">Loading posts...</div>
-        </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">Loading...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-black mb-4">Explore Posts</h1>
-          <p className="text-gray-600">Discover what others are sharing</p>
-        </div>
-
-        {/* Search Bar */}
-        <div className="mb-6">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder="Search posts..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              className="flex-1 px-4 py-2 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFD600]"
-            />
-            <Button 
-              onClick={handleSearch}
-              className="btn-primary"
-            >
-              Search
-            </Button>
-            <Button 
-              onClick={loadPosts}
-              variant="outline"
-              className="border-2 border-black"
-            >
-              Show All
-            </Button>
-          </div>
-        </div>
-
-        {error && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Explore Posts</h1>
+        {user && (
+          <Button onClick={() => setShowCreateForm(!showCreateForm)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Create Post
+          </Button>
         )}
+      </div>
 
-        <div className="space-y-6">
-          {posts.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No posts found</p>
-            </div>
-          ) : (
-            posts.map((post) => (
-              <Card key={post.idPostingan} className="border-2 border-black card-shadow">
-                <CardHeader>
-                  <CardTitle className="flex justify-between items-center">
-                    <span>{post.judul}</span>
-                    <div className="text-right">
-                      <span className="text-sm text-gray-500 block">
-                        {new Date(post.timestamp).toLocaleDateString()}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        User: {post.idUsers}
-                      </span>
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="mb-4">{post.deskripsi}</p>
-                  {post.imageUrl && (
-                    <div className="mb-4">
-                      <img 
-                        src={post.imageUrl} 
-                        alt="Post image" 
-                        className="max-w-full h-auto rounded-lg border-2 border-black"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none'
-                        }}
-                      />
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleLikeDislike(post.idPostingan, "like")}
-                        className="border-2 border-black"
-                      >
-                        👍 {post.like}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleLikeDislike(post.idPostingan, "dislike")}
-                        className="border-2 border-black"
-                      >
-                        👎 {post.dislike}
-                      </Button>
-                    </div>
-                    {user && (user.role === "admin" || user.idUsers === post.idUsers) && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDelete(post.idPostingan)}
-                        className="border-2 border-black"
-                      >
-                        Delete
-                      </Button>
-                    )}
+      {showCreateForm && user && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Create New Post</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreatePost} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Title</label>
+                <input
+                  type="text"
+                  value={newPost.judul}
+                  onChange={(e) => setNewPost(prev => ({ ...prev, judul: e.target.value }))}
+                  className="w-full p-2 border rounded"
+                  placeholder="Enter post title"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Description</label>
+                <textarea
+                  value={newPost.deskripsi}
+                  onChange={(e) => setNewPost(prev => ({ ...prev, deskripsi: e.target.value }))}
+                  className="w-full p-2 border rounded h-32"
+                  placeholder="What's on your mind?"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Image (Optional)</label>
+                <ImageUpload onImageUpload={handleImageUpload} />
+                {newPost.imageUrl && (
+                  <div className="mt-2">
+                    <img src={newPost.imageUrl} alt="Preview" className="max-w-xs rounded" />
                   </div>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </div>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <Button type="submit">Create Post</Button>
+                <Button type="button" variant="outline" onClick={() => setShowCreateForm(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="space-y-6">
+        {posts.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center">
+              <p className="text-gray-500">No posts available yet.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          posts.map((post) => (
+            <Card key={post.idPostingan}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-lg">{post.judul}</CardTitle>
+                    <p className="text-sm text-gray-500">
+                      by {post.username || 'Unknown'} • {new Date(post.timestamp).toLocaleDateString()}
+                    </p>
+                  </div>
+                  {user && (user.role === 'admin' || user.idUsers === post.idUsers) && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleDelete(post.idPostingan)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+
+              <CardContent>
+                <p className="mb-4">{post.deskripsi}</p>
+
+                {post.imageUrl && (
+                  <img 
+                    src={post.imageUrl} 
+                    alt="Post image" 
+                    className="w-full max-w-md mx-auto rounded-lg mb-4"
+                  />
+                )}
+
+                <div className="flex items-center gap-4 text-sm text-gray-500">
+                  <button 
+                    className="flex items-center gap-1 hover:text-red-500"
+                    onClick={() => handleLike(post.idPostingan, 'like')}
+                    disabled={!user}
+                  >
+                    <Heart className="w-4 h-4" />
+                    {post.like}
+                  </button>
+                  <button 
+                    className="flex items-center gap-1 hover:text-blue-500"
+                    onClick={() => handleLike(post.idPostingan, 'dislike')}
+                    disabled={!user}
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    {post.dislike}
+                  </button>
+                  <button className="flex items-center gap-1 hover:text-green-500">
+                    <Share2 className="w-4 h-4" />
+                    Share
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
     </div>
   )
