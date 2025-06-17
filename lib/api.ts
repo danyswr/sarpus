@@ -83,126 +83,111 @@ export async function loginUser(email: string, password: string) {
     // Hash password to match what's stored in spreadsheet
     const hashedPassword = btoa(password)
 
-    console.log('Login with GET request')
-
-    // Add timeout to prevent hanging
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 20000) // 20 second timeout
-
-    // Try POST with no-cors mode first (like registration)
-    console.log('Login with POST request using no-cors mode')
+    // Try GET request first (more reliable for Google Apps Script)
+    console.log('Trying GET request for login')
     
-    const payload = {
-      action: 'login',
-      email: email,
-      password: hashedPassword,
-    }
-
-    console.log('Login payload:', payload)
-
-    const response = await fetch(API_URL, {
-      method: "POST",
-      mode: 'no-cors',
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    })
-
-    clearTimeout(timeoutId)
-
-    console.log('Login POST response status:', response.status)
-    console.log('Login POST response type:', response.type)
-
-    // In no-cors mode, we can't read the response
-    if (response.type === 'opaque') {
-      // Since we can't read the response in no-cors mode, 
-      // we'll try a GET request to verify the login
-      console.log('POST sent, now trying GET to verify login')
-      
-      const getController = new AbortController()
-      const getTimeoutId = setTimeout(() => getController.abort(), 15000)
-      
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+    
+    try {
       const getUrl = `${API_URL}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(hashedPassword)}&t=${Date.now()}`
       
+      const getResponse = await fetch(getUrl, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+        },
+        signal: controller.signal,
+      })
+      
+      clearTimeout(timeoutId)
+      
+      if (getResponse.ok) {
+        const result = await getResponse.json()
+        console.log('GET Login response:', result)
+        
+        if (result.error) {
+          throw new Error(result.error)
+        }
+        
+        // If user found, verify password client-side
+        if (result.hashedPassword) {
+          if (result.hashedPassword === hashedPassword) {
+            return {
+              message: "Login berhasil",
+              idUsers: result.idUsers,
+              role: result.role,
+              username: result.username,
+              email: result.email,
+              nim: result.nim,
+              jurusan: result.jurusan,
+              bio: result.bio || "",
+              location: result.location || "",
+              website: result.website || "",
+            }
+          } else {
+            throw new Error("Password salah")
+          }
+        }
+        
+        return result
+      } else {
+        throw new Error(`Login failed: ${getResponse.status}`)
+      }
+    } catch (getError) {
+      console.log('GET login failed, trying POST:', getError)
+      
+      // If GET fails, try POST as fallback
+      const postController = new AbortController()
+      const postTimeoutId = setTimeout(() => postController.abort(), 15000)
+      
       try {
-        const getResponse = await fetch(getUrl, {
-          method: "GET",
+        const payload = {
+          action: 'login',
+          email: email,
+          password: hashedPassword,
+        }
+
+        console.log('Fallback POST login payload:', payload)
+
+        const postResponse = await fetch(API_URL, {
+          method: "POST",
           headers: {
-            "Accept": "application/json",
             "Content-Type": "application/json",
           },
-          signal: getController.signal,
+          body: JSON.stringify(payload),
+          signal: postController.signal,
         })
-        
-        clearTimeout(getTimeoutId)
-        
-        if (getResponse.ok) {
-          const result = await getResponse.json()
-          console.log('GET Login response:', result)
+
+        clearTimeout(postTimeoutId)
+
+        if (postResponse.ok) {
+          const result = await postResponse.json()
+          console.log('POST Login response:', result)
           
           if (result.error) {
             throw new Error(result.error)
           }
           
-          // If user found, verify password client-side
-          if (result.hashedPassword) {
-            if (result.hashedPassword === hashedPassword) {
-              return {
-                message: "Login berhasil",
-                idUsers: result.idUsers,
-                role: result.role,
-                username: result.username,
-                email: result.email,
-                nim: result.nim,
-                jurusan: result.jurusan,
-                bio: result.bio || "",
-                location: result.location || "",
-                website: result.website || "",
-              }
-            } else {
-              throw new Error("Password salah")
-            }
-          }
-          
           return result
         } else {
-          throw new Error(`GET login failed: ${getResponse.status}`)
+          throw new Error(`POST login failed: ${postResponse.status}`)
         }
-      } catch (getError) {
-        console.log('GET login failed:', getError)
-        // If GET also fails, assume login was successful since POST went through
-        // This is a fallback for no-cors mode
-        console.log('Assuming login successful due to no-cors limitations')
-        return {
-          message: "Login berhasil (mode terbatas)",
-          idUsers: "USER_TEMP",
-          role: "user",
-          username: email.split('@')[0],
-          email: email,
-          nim: "",
-          jurusan: "",
-          bio: "",
-          location: "",
-          website: "",
+      } catch (postError) {
+        console.log('Both GET and POST failed:', postError)
+        
+        // If both fail, provide a helpful error message
+        if (postError instanceof Error && postError.name === 'AbortError') {
+          throw new Error("Koneksi timeout. Silakan coba lagi.")
         }
+        
+        if (postError instanceof TypeError && postError.message === 'Failed to fetch') {
+          throw new Error("Tidak dapat terhubung ke server. Periksa koneksi internet Anda.")
+        }
+        
+        throw new Error("Login gagal. Silakan coba lagi.")
       }
     }
-
-    // If we can read the response (shouldn't happen in no-cors)
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const result = await response.json()
-    console.log('Login response:', result)
-    
-    if (result.error) {
-      throw new Error(result.error)
-    }
-    
-    return result
   } catch (error) {
     console.error("Login error:", error)
     
@@ -211,7 +196,6 @@ export async function loginUser(email: string, password: string) {
     }
     
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      // Try to provide more helpful error message
       throw new Error("Koneksi gagal. Pastikan internet stabil dan coba lagi.")
     }
     
