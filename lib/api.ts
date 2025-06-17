@@ -77,55 +77,106 @@ export async function loginUser(email: string, password: string) {
       return await mockLoginUser(email, password)
     }
 
+    console.log('Using real API for login')
+    console.log('Login attempt for:', email)
+
     // Hash password to match what's stored in spreadsheet
     const hashedPassword = btoa(password)
 
-    const response = await fetch(`${API_URL}`, {
+    const payload = {
+      action: "login",
+      email,
+      password: hashedPassword,
+    }
+
+    console.log('Login payload:', payload)
+
+    // Add timeout to prevent hanging
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+
+    // First try to get user data with GET request
+    try {
+      const getUserResponse = await fetch(`${API_URL}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(hashedPassword)}&t=${Date.now()}`, {
+        method: "GET",
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (getUserResponse.ok) {
+        const result = await getUserResponse.json()
+        console.log('Login response:', result)
+        
+        if (result.error) {
+          throw new Error(result.error)
+        }
+        
+        // If user found, verify password client-side since GAS returns hashed password
+        if (result.hashedPassword) {
+          if (result.hashedPassword === hashedPassword) {
+            return {
+              message: "Login berhasil",
+              idUsers: result.idUsers,
+              role: result.role,
+              username: result.username,
+              email: result.email,
+              nim: result.nim,
+              jurusan: result.jurusan,
+              bio: result.bio || "",
+              location: result.location || "",
+              website: result.website || "",
+            }
+          } else {
+            throw new Error("Password salah")
+          }
+        }
+        
+        return result
+      }
+    } catch (getError) {
+      console.log('GET login failed, trying POST with no-cors:', getError)
+    }
+
+    // If GET fails, try POST with no-cors (fallback)
+    const controller2 = new AbortController()
+    const timeoutId2 = setTimeout(() => controller2.abort(), 15000)
+
+    const response = await fetch(API_URL, {
       method: "POST",
+      mode: "no-cors",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        action: "login",
-        email,
-        password: hashedPassword,
-      }),
+      body: JSON.stringify(payload),
+      signal: controller2.signal,
     })
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+    clearTimeout(timeoutId2)
+
+    console.log('Login POST response status:', response.status)
+    console.log('Login POST response type:', response.type)
+
+    // In no-cors mode, we can't read the response, so we'll use mock data for now
+    // In a real implementation, you'd need to handle this differently
+    if (response.type === 'opaque') {
+      console.log('Login request sent successfully (no-cors mode)')
+      // For now, return a mock success since we can't read the actual response
+      throw new Error("Login tidak dapat diverifikasi dengan mode no-cors. Gunakan GET endpoint atau perbaiki CORS di Google Apps Script.")
     }
 
-    const result = await response.json()
-    
-    // Handle the Google Apps Script response format
-    if (result.error) {
-      throw new Error(result.error)
-    }
-    
-    // If user found, verify password client-side since GAS returns hashed password
-    if (result.hashedPassword) {
-      if (result.hashedPassword === hashedPassword) {
-        return {
-          message: "Login berhasil",
-          idUsers: result.idUsers,
-          role: result.role,
-          username: result.username,
-          email: result.email,
-          nim: result.nim,
-          jurusan: result.jurusan,
-          bio: result.bio,
-          location: result.location,
-          website: result.website,
-        }
-      } else {
-        throw new Error("Password salah")
-      }
-    }
-    
-    return result
+    throw new Error("Login gagal - tidak dapat mengakses API")
   } catch (error) {
     console.error("Login error:", error)
+    
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error("Login timeout. Silakan coba lagi.")
+    }
+    
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      throw new Error("Network error: Tidak dapat terhubung ke layanan login. Periksa koneksi internet atau coba lagi nanti.")
+    }
+    
     throw new Error("Login error: " + (error instanceof Error ? error.message : String(error)))
   }
 }

@@ -36,6 +36,41 @@ function doGet(e) {
       return response
     }
 
+    if (action === "login") {
+      Logger.log("GET Login request received")
+      Logger.log("Email: " + e.parameter.email)
+      Logger.log("Password: " + e.parameter.password)
+      
+      if (!sheetUsers) {
+        var response = ContentService.createTextOutput(
+          JSON.stringify({
+            error: "Sheet 'Users' tidak ditemukan",
+          }),
+        ).setMimeType(ContentService.MimeType.JSON)
+        
+        response.setHeaders({
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Accept',
+        })
+        
+        return response
+      }
+
+      var result = handleLogin({ 
+        email: e.parameter.email, 
+        password: e.parameter.password 
+      }, sheetUsers)
+      
+      result.setHeaders({
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Accept',
+      })
+      
+      return result
+    }
+
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
     var sheetPostingan = spreadsheet.getSheetByName("Posting")
     var sheetUsers = spreadsheet.getSheetByName("Users")
