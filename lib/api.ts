@@ -83,29 +83,36 @@ export async function loginUser(email: string, password: string) {
     // Hash password to match what's stored in spreadsheet
     const hashedPassword = btoa(password)
 
-    console.log('Login with GET request first')
+    console.log('Login with GET request')
 
     // Add timeout to prevent hanging
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 20000) // 20 second timeout
 
-    // Try GET request first (this works with CORS properly configured)
-    const getUserResponse = await fetch(`${API_URL}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(hashedPassword)}&t=${Date.now()}`, {
+    // Use GET request with proper CORS handling
+    const loginUrl = `${API_URL}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(hashedPassword)}&t=${Date.now()}`
+    console.log('Login URL:', loginUrl)
+
+    const response = await fetch(loginUrl, {
       method: "GET",
       headers: {
         "Accept": "application/json",
         "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
       },
       signal: controller.signal,
     })
 
     clearTimeout(timeoutId)
 
-    if (!getUserResponse.ok) {
-      throw new Error(`HTTP error! status: ${getUserResponse.status}`)
+    console.log('Login response status:', response.status)
+    console.log('Login response ok:', response.ok)
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    const result = await getUserResponse.json()
+    const result = await response.json()
     console.log('Login response:', result)
     
     if (result.error) {
@@ -141,7 +148,12 @@ export async function loginUser(email: string, password: string) {
     }
     
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      throw new Error("Network error: Tidak dapat terhubung ke layanan login. Periksa koneksi internet atau coba lagi nanti.")
+      // Try to provide more helpful error message
+      throw new Error("Koneksi gagal. Pastikan internet stabil dan coba lagi.")
+    }
+    
+    if (error instanceof Error && error.message.includes('CORS')) {
+      throw new Error("CORS error: Tidak dapat mengakses layanan login.")
     }
     
     throw new Error("Login error: " + (error instanceof Error ? error.message : String(error)))

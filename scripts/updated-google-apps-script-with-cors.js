@@ -63,6 +63,7 @@ function doGet(e) {
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
           'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization',
           'Access-Control-Max-Age': '86400',
+          'Cache-Control': 'no-cache',
         })
         
         return response
@@ -78,6 +79,7 @@ function doGet(e) {
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
         'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization',
         'Access-Control-Max-Age': '86400',
+        'Cache-Control': 'no-cache',
       })
       
       return result
