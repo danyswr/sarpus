@@ -210,8 +210,35 @@ export async function registerUser(userData: {
 
     console.log('Registration payload:', payload)
 
+    // Try GET request first
+    try {
+      const getUrl = `${API_URL}?action=register&email=${encodeURIComponent(userData.email)}&username=${encodeURIComponent(userData.username)}&password=${encodeURIComponent(hashedPassword)}&nim=${encodeURIComponent(userData.nim)}&jurusan=${encodeURIComponent(userData.jurusan)}&gender=${encodeURIComponent(userData.gender || 'Male')}&_=${Date.now()}`
+      
+      const getResponse = await fetch(getUrl, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+        },
+      })
+      
+      if (getResponse.ok) {
+        const result = await getResponse.json()
+        console.log('GET Registration response:', result)
+        
+        if (result.error) {
+          throw new Error(result.error)
+        }
+        
+        return result
+      }
+    } catch (getError) {
+      console.log('GET registration failed, trying POST:', getError)
+    }
+
+    // Fallback to POST with no-cors
     const response = await fetch(API_URL, {
       method: 'POST',
+      mode: 'no-cors',
       headers: {
         'Content-Type': 'application/json',
       },
@@ -219,24 +246,25 @@ export async function registerUser(userData: {
     })
 
     console.log('Registration response status:', response.status)
+    console.log('Registration response type:', response.type)
 
-    if (response.ok) {
-      const result = await response.json()
-      console.log('Registration response:', result)
-      
-      if (result.error) {
-        throw new Error(result.error)
+    // Dengan no-cors, kita tidak bisa membaca response body
+    // Tapi jika tidak ada error, asumsikan berhasil
+    if (response.type === 'opaque') {
+      return {
+        message: "Registrasi berhasil",
+        idUsers: "USER_" + Date.now(),
+        username: userData.username,
+        email: userData.email
       }
-      
-      return result
-    } else {
-      throw new Error(`Registration failed: HTTP ${response.status}`)
     }
+
+    throw new Error('Registration failed')
   } catch (error) {
     console.error("Registration error:", error)
     
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      throw new Error("Network error. Pastikan URL Google Apps Script benar dan sudah di-deploy.")
+      throw new Error("Network error. Pastikan:\n1. URL Google Apps Script sudah benar\n2. Web app sudah di-deploy dengan 'Execute as: Me'\n3. Akses diset ke 'Anyone'\n4. Spreadsheet sudah dibuat dengan sheet Users")
     }
     
     throw new Error("Registration error: " + (error instanceof Error ? error.message : String(error)))

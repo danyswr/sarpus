@@ -1,11 +1,11 @@
+
 /**
  * Google Apps Script untuk Mahasiswa Feedback Platform
  * Deploy sebagai web app dengan "Execute as: Me" dan "Who has access: Anyone"
  * 
  * STRUKTUR SPREADSHEET:
- * Sheet "Users": ID Users, Email, Username, Password, NIM, Gender, Jurusan, Role, TimeStamp
- * Sheet "Posting": ID Postingan, ID Users, timestamp, Judul, Deskripsi, Like, Dislike
- * Sheet "Likes": (opsional untuk tracking likes per user)
+ * Sheet "Users": idUsers, username, email, password, role, nim, jurusan, gender, bio, location, website, createdAt
+ * Sheet "Posting": idPostingan, idUsers, judul, deskripsi, imageUrl, timestamp, likeCount, dislikeCount
  */
 
 function doGet(e) {
@@ -121,11 +121,11 @@ function handleLogin(e) {
     }
 
     var headers = data[0];
-    var emailCol = findColumn(headers, "Email");
-    var passwordCol = findColumn(headers, "Password");
+    var emailCol = findColumn(headers, "email");
+    var passwordCol = findColumn(headers, "password");
 
     if (emailCol === -1 || passwordCol === -1) {
-      return { error: "Kolom Email atau Password tidak ditemukan" };
+      return { error: "Kolom email atau password tidak ditemukan" };
     }
 
     // Cari user
@@ -134,12 +134,15 @@ function handleLogin(e) {
       if (row[emailCol] === email && row[passwordCol] === password) {
         return {
           message: "Login berhasil",
-          idUsers: row[findColumn(headers, "ID Users")] || "USER_" + i,
-          username: row[findColumn(headers, "Username")] || email.split('@')[0],
+          idUsers: row[findColumn(headers, "idUsers")] || "USER_" + i,
+          username: row[findColumn(headers, "username")] || email.split('@')[0],
           email: email,
-          role: row[findColumn(headers, "Role")] || "user",
-          nim: row[findColumn(headers, "NIM")] || "",
-          jurusan: row[findColumn(headers, "Jurusan")] || ""
+          role: row[findColumn(headers, "role")] || "user",
+          nim: row[findColumn(headers, "nim")] || "",
+          jurusan: row[findColumn(headers, "jurusan")] || "",
+          bio: row[findColumn(headers, "bio")] || "",
+          location: row[findColumn(headers, "location")] || "",
+          website: row[findColumn(headers, "website")] || ""
         };
       }
     }
@@ -164,13 +167,18 @@ function handleRegister(e) {
     var usersSheet = spreadsheet.getSheetByName("Users");
 
     if (!usersSheet) {
-      return { error: "Sheet Users tidak ditemukan" };
+      // Buat sheet Users jika belum ada
+      usersSheet = spreadsheet.insertSheet("Users");
+      // Tambah header
+      usersSheet.getRange(1, 1, 1, 12).setValues([[
+        "idUsers", "username", "email", "password", "role", "nim", "jurusan", "gender", "bio", "location", "website", "createdAt"
+      ]]);
     }
 
     // Cek apakah email sudah ada
     var data = usersSheet.getDataRange().getValues();
     var headers = data[0];
-    var emailCol = findColumn(headers, "Email");
+    var emailCol = findColumn(headers, "email");
 
     for (var i = 1; i < data.length; i++) {
       if (data[i][emailCol] === userData.email) {
@@ -179,17 +187,20 @@ function handleRegister(e) {
     }
 
     // Tambah user baru
-    var newId = "USER" + Date.now();
+    var newId = "USER_" + Date.now();
     var newRow = [
-      newId,                        // ID Users
-      userData.email,               // Email
-      userData.username,            // Username
-      userData.password,            // Password
-      userData.nim || "",           // NIM
-      userData.gender || "Male",    // Gender
-      userData.jurusan || "",       // Jurusan
-      "user",                       // Role
-      new Date()                    // TimeStamp
+      newId,                        // idUsers
+      userData.username,            // username
+      userData.email,               // email
+      userData.password,            // password
+      "user",                       // role
+      userData.nim || "",           // nim
+      userData.jurusan || "",       // jurusan
+      userData.gender || "Male",    // gender
+      "",                           // bio
+      "",                           // location
+      "",                           // website
+      new Date()                    // createdAt
     ];
 
     usersSheet.appendRow(newRow);
@@ -214,7 +225,12 @@ function handleGetPosts() {
     var usersSheet = spreadsheet.getSheetByName("Users");
 
     if (!postingSheet) {
-      return { error: "Sheet Posting tidak ditemukan" };
+      // Buat sheet Posting jika belum ada
+      postingSheet = spreadsheet.insertSheet("Posting");
+      postingSheet.getRange(1, 1, 1, 8).setValues([[
+        "idPostingan", "idUsers", "judul", "deskripsi", "imageUrl", "timestamp", "likeCount", "dislikeCount"
+      ]]);
+      return []; // Return empty array untuk sheet baru
     }
 
     var postData = postingSheet.getDataRange().getValues();
@@ -231,14 +247,14 @@ function handleGetPosts() {
     for (var i = 1; i < postData.length; i++) {
       var row = postData[i];
       var post = {
-        idPostingan: row[findColumn(postHeaders, "ID Postingan")] || "POST_" + i,
-        idUsers: row[findColumn(postHeaders, "ID Users")] || "",
+        idPostingan: row[findColumn(postHeaders, "idPostingan")] || "POST_" + i,
+        idUsers: row[findColumn(postHeaders, "idUsers")] || "",
         timestamp: row[findColumn(postHeaders, "timestamp")] || new Date(),
-        judul: row[findColumn(postHeaders, "Judul")] || "",
-        deskripsi: row[findColumn(postHeaders, "Deskripsi")] || "",
-        likeCount: parseInt(row[findColumn(postHeaders, "Like")] || 0),
-        dislikeCount: parseInt(row[findColumn(postHeaders, "Dislike")] || 0),
-        imageUrl: "",
+        judul: row[findColumn(postHeaders, "judul")] || "",
+        deskripsi: row[findColumn(postHeaders, "deskripsi")] || "",
+        imageUrl: row[findColumn(postHeaders, "imageUrl")] || "",
+        likeCount: parseInt(row[findColumn(postHeaders, "likeCount")] || 0),
+        dislikeCount: parseInt(row[findColumn(postHeaders, "dislikeCount")] || 0),
         username: "Anonymous",
         isLiked: false,
         isDisliked: false
@@ -246,8 +262,8 @@ function handleGetPosts() {
 
       // Cari username dari Users sheet
       if (userData.length > 1 && post.idUsers) {
-        var userIdCol = findColumn(userHeaders, "ID Users");
-        var usernameCol = findColumn(userHeaders, "Username");
+        var userIdCol = findColumn(userHeaders, "idUsers");
+        var usernameCol = findColumn(userHeaders, "username");
 
         for (var j = 1; j < userData.length; j++) {
           if (userData[j][userIdCol] === post.idUsers) {
@@ -280,18 +296,23 @@ function handleCreatePost(e) {
     var postingSheet = spreadsheet.getSheetByName("Posting");
 
     if (!postingSheet) {
-      return { error: "Sheet Posting tidak ditemukan" };
+      // Buat sheet Posting jika belum ada
+      postingSheet = spreadsheet.insertSheet("Posting");
+      postingSheet.getRange(1, 1, 1, 8).setValues([[
+        "idPostingan", "idUsers", "judul", "deskripsi", "imageUrl", "timestamp", "likeCount", "dislikeCount"
+      ]]);
     }
 
-    var newId = "POST" + Date.now();
+    var newId = "POST_" + Date.now();
     var newRow = [
-      newId,                    // ID Postingan
-      postData.idUsers,         // ID Users
-      new Date(),               // timestamp
-      postData.judul || "",     // Judul
-      postData.deskripsi,       // Deskripsi
-      0,                        // Like
-      0                         // Dislike
+      newId,                        // idPostingan
+      postData.idUsers,             // idUsers
+      postData.judul || "",         // judul
+      postData.deskripsi,           // deskripsi
+      postData.imageUrl || "",      // imageUrl
+      new Date(),                   // timestamp
+      0,                            // likeCount
+      0                             // dislikeCount
     ];
 
     postingSheet.appendRow(newRow);
@@ -324,9 +345,9 @@ function handleLikeDislike(e) {
 
     var postData = postingSheet.getDataRange().getValues();
     var headers = postData[0];
-    var idCol = findColumn(headers, "ID Postingan");
-    var likeCol = findColumn(headers, "Like");
-    var dislikeCol = findColumn(headers, "Dislike");
+    var idCol = findColumn(headers, "idPostingan");
+    var likeCol = findColumn(headers, "likeCount");
+    var dislikeCol = findColumn(headers, "dislikeCount");
 
     // Cari post yang akan di-like/dislike
     for (var i = 1; i < postData.length; i++) {
