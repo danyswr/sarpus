@@ -83,16 +83,16 @@ export async function loginUser(email: string, password: string) {
     // Hash password to match what's stored in spreadsheet
     const hashedPassword = btoa(password)
 
-    // First try: GET request with CORS headers
-    console.log('Login with GET request')
+    // Try GET request first (most compatible with Google Apps Script)
+    console.log('Trying GET request for login')
     try {
-      const getUrl = `${API_URL}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(hashedPassword)}&t=${Date.now()}`
+      const getUrl = `${API_URL}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(hashedPassword)}&_=${Date.now()}`
       
       const getResponse = await fetch(getUrl, {
         method: "GET",
         headers: {
           "Accept": "application/json",
-          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
         },
       })
       
@@ -104,9 +104,16 @@ export async function loginUser(email: string, password: string) {
           throw new Error(result.error)
         }
         
+        // Verify password if hashedPassword is returned
+        if (result.hashedPassword) {
+          if (hashedPassword !== result.hashedPassword) {
+            throw new Error("Password salah")
+          }
+        }
+        
         return {
           message: "Login berhasil",
-          idUsers: result.idUsers || "USER_" + Date.now(),
+          idUsers: result.idUsers,
           role: result.role || "user",
           username: result.username || email.split('@')[0],
           email: result.email || email,
@@ -116,101 +123,73 @@ export async function loginUser(email: string, password: string) {
           location: result.location || "",
           website: result.website || "",
         }
+      } else {
+        console.log('GET request failed with status:', getResponse.status)
+        throw new Error('GET request failed')
       }
     } catch (getError) {
-      console.log('GET request failed:', getError)
-    }
-    
-    // Second try: POST request with no-cors mode (more compatible)
-    console.log('Login with POST request using no-cors mode')
-    try {
-      const payload = {
-        action: 'login',
-        email: email,
-        password: hashedPassword,
-      }
+      console.log('GET login failed, trying POST:', getError)
+      
+      // Fallback to POST request
+      try {
+        const payload = {
+          action: 'login',
+          email: email,
+          password: hashedPassword,
+        }
 
-      console.log('Login payload:', payload)
+        console.log('Fallback POST login payload:', payload)
 
-      const postResponse = await fetch(API_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      })
+        const postResponse = await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          body: JSON.stringify(payload),
+        })
 
-      console.log('Login POST response status:', postResponse.status)
-      console.log('Login POST response type:', postResponse.type)
-
-      // In no-cors mode, we can't read the response
-      // But if the request doesn't throw an error, we assume it worked
-      if (postResponse.type === 'opaque') {
-        console.log('POST sent, now trying GET to verify login')
-        
-        // Try to verify login with a GET request
-        try {
-          const verifyUrl = `${API_URL}?action=verify&email=${encodeURIComponent(email)}&t=${Date.now()}`
-          const verifyResponse = await fetch(verifyUrl, {
-            method: "GET",
-            headers: {
-              "Accept": "application/json",
-            },
-          })
+        if (postResponse.ok) {
+          const result = await postResponse.json()
+          console.log('POST Login response:', result)
           
-          if (verifyResponse.ok) {
-            const verifyResult = await verifyResponse.json()
-            if (verifyResult && !verifyResult.error) {
-              return {
-                message: "Login berhasil",
-                idUsers: verifyResult.idUsers || "USER_" + Date.now(),
-                role: verifyResult.role || "user",
-                username: verifyResult.username || email.split('@')[0],
-                email: verifyResult.email || email,
-                nim: verifyResult.nim || "",
-                jurusan: verifyResult.jurusan || "",
-                bio: verifyResult.bio || "",
-                location: verifyResult.location || "",
-                website: verifyResult.website || "",
-              }
+          if (result.error) {
+            throw new Error(result.error)
+          }
+          
+          // Verify password if hashedPassword is returned
+          if (result.hashedPassword) {
+            if (hashedPassword !== result.hashedPassword) {
+              throw new Error("Password salah")
             }
           }
-        } catch (verifyError) {
-          console.log('GET login failed:', verifyError)
+          
+          return {
+            message: "Login berhasil",
+            idUsers: result.idUsers,
+            role: result.role || "user",
+            username: result.username || email.split('@')[0],
+            email: result.email || email,
+            nim: result.nim || "",
+            jurusan: result.jurusan || "",
+            bio: result.bio || "",
+            location: result.location || "",
+            website: result.website || "",
+          }
+        } else {
+          throw new Error('POST request failed with status: ' + postResponse.status)
         }
-        
-        // If verification fails, return a temporary success response
-        console.log('Assuming login successful due to no-cors limitations')
-        return {
-          message: "Login berhasil (mode terbatas)",
-          idUsers: "USER_TEMP",
-          role: "user",
-          username: email.split('@')[0],
-          email: email,
-          nim: "",
-          jurusan: "",
-          bio: "",
-          location: "",
-          website: "",
-        }
+      } catch (postError) {
+        console.log('Both GET and POST failed:', postError)
+        throw new Error("Tidak dapat terhubung ke server login")
       }
-    } catch (postError) {
-      console.log('POST request also failed:', postError)
     }
-
-    // If all requests fail, throw an error
-    throw new Error("Tidak dapat terhubung ke Google Apps Script. Silakan coba lagi nanti.")
     
   } catch (error) {
     console.error("Login error:", error)
     
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
       throw new Error("Tidak dapat terhubung ke server. Periksa koneksi internet Anda.")
-    }
-    
-    if (error instanceof Error && error.message.includes('CORS')) {
-      throw new Error("CORS error: Tidak dapat mengakses layanan login.")
     }
     
     throw new Error("Login error: " + (error instanceof Error ? error.message : String(error)))
