@@ -88,14 +88,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("Login successful, redirecting...")
       console.log("User role for redirect:", userData.role)
       
-      // Use router.replace to avoid back button issues
-      if (userData.role && userData.role.toLowerCase() === "admin") {
-        console.log("Redirecting to admin dashboard")
-        router.replace("/admin")
-      } else {
-        console.log("Redirecting to user dashboard") 
-        router.replace("/dashboard")
-      }
+      // Use setTimeout to ensure state is set before redirect
+      setTimeout(() => {
+        if (userData.role && userData.role.toLowerCase() === "admin") {
+          console.log("Redirecting to admin dashboard")
+          router.replace("/admin")
+        } else {
+          console.log("Redirecting to user dashboard") 
+          router.replace("/dashboard")
+        }
+      }, 100)
 
       return true
     } catch (error) {

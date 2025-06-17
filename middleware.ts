@@ -38,29 +38,12 @@ export function middleware(request: NextRequest) {
       console.log("Middleware - Current path:", pathname)
       console.log("Middleware - User role:", userData.role)
       
-      // Prevent redirect loops - allow exact path matches
-      if (pathname === "/admin" && userData.role?.toLowerCase() === "admin") {
-        console.log("Admin accessing admin page - allowing")
-        return NextResponse.next()
-      }
-      
-      if (pathname === "/dashboard" && userData.role?.toLowerCase() !== "admin") {
-        console.log("User accessing dashboard page - allowing")
-        return NextResponse.next()
-      }
-      
-      // Check role-based access for admin routes
+      // Only check role-based access for admin routes
       if (pathname.startsWith("/admin")) {
         if (userData.role?.toLowerCase() !== "admin") {
           console.log("Non-admin user trying to access admin page, redirecting to dashboard")
           return NextResponse.redirect(new URL("/dashboard", request.url))
         }
-      }
-      
-      // Redirect admin users trying to access regular dashboard to admin page
-      if (pathname.startsWith("/dashboard") && userData.role?.toLowerCase() === "admin") {
-        console.log("Admin user accessing dashboard, redirecting to admin page")
-        return NextResponse.redirect(new URL("/admin", request.url))
       }
       
     } catch (error) {

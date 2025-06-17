@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useEffect } from "react"
 
 export default function DashboardPage() {
-  const { user, isLoading } = useAuth()
+  const { user, logout, isLoading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
@@ -13,8 +13,13 @@ export default function DashboardPage() {
     console.log("Dashboard page - isLoading:", isLoading)
     if (user) {
       console.log("Dashboard page - User role:", user.role)
+      // Redirect admin users to admin page
+      if (user.role && user.role.toLowerCase() === "admin") {
+        console.log("Admin user detected, redirecting to admin page")
+        router.replace("/admin")
+      }
     }
-  }, [user, isLoading])
+  }, [user, isLoading, router])
 
   if (isLoading) {
     return <div>Loading...</div>
@@ -23,6 +28,11 @@ export default function DashboardPage() {
   if (!user) {
     console.log("No user found, redirecting to login")
     router.push("/login")
+    return null
+  }
+
+  // Block admin users from accessing regular dashboard
+  if (user && user.role && user.role.toLowerCase() === "admin") {
     return null
   }
 
