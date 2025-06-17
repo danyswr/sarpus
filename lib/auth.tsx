@@ -57,22 +57,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(response.error)
       }
 
-      // Verify password hash if hashedPassword is provided
-      if (response.hashedPassword) {
-        // Simple hash verification (you might want to use a proper library like bcrypt)
-        const hashedInput = btoa(password) // Simple base64 encoding for demo
-        if (hashedInput !== response.hashedPassword) {
-          throw new Error("Password salah")
-        }
-      }
-
-      // Create user object from response
+      // Create user object from response - sesuai dengan Google Apps Script response
       const userData: User = {
         idUsers: response.idUsers,
         username: response.username,
         email: response.email,
         role: response.role || "user",
-        nim: response.nim || "",
+        nim: response.nim?.toString() || "",
         jurusan: response.jurusan || "",
       }
 
@@ -84,20 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       document.cookie = `auth-token=authenticated; path=/; max-age=86400`
       document.cookie = `user-data=${encodeURIComponent(JSON.stringify(userData))}; path=/; max-age=86400`
 
-      // Redirect after successful login
       console.log("Login successful, redirecting...")
       console.log("User role for redirect:", userData.role)
-      
-      // Use setTimeout to ensure state is set before redirect
-      setTimeout(() => {
-        if (userData.role && userData.role.toLowerCase() === "admin") {
-          console.log("Redirecting to admin dashboard")
-          router.replace("/admin")
-        } else {
-          console.log("Redirecting to user dashboard") 
-          router.replace("/dashboard")
-        }
-      }, 100)
 
       return true
     } catch (error) {

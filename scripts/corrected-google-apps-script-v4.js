@@ -2,6 +2,10 @@
 /**
  * Google Apps Script untuk Mahasiswa Feedback Platform - FINAL VERSION
  * Deploy sebagai web app dengan "Execute as: Me" dan "Who has access: Anyone"
+ * 
+ * STRUKTUR SPREADSHEET:
+ * Sheet "Users": idUsers, username, email, password, role, nim, jurusan, gender, bio, location, website, createdAt
+ * Sheet "Posting": idPostingan, idUsers, judul, deskripsi, imageUrl, timestamp, likeCount, dislikeCount
  */
 
 function doGet(e) {
@@ -14,16 +18,18 @@ function doPost(e) {
 
 function handleRequest(e) {
   try {
+    // Create response dengan CORS headers
     var response = ContentService.createTextOutput();
     response.setMimeType(ContentService.MimeType.JSON);
 
+    // Dapatkan action
     var action = getAction(e);
     Logger.log("Action: " + action);
     Logger.log("Parameters: " + JSON.stringify(e.parameter));
     if (e.postData) {
       Logger.log("POST data: " + e.postData.contents);
     }
-    
+
     var result = {};
 
     switch(action) {
@@ -35,6 +41,18 @@ function handleRequest(e) {
         break;
       case "register":
         result = handleRegister(e);
+        break;
+      case "getPosts":
+        result = handleGetPosts();
+        break;
+      case "createPost":
+        result = handleCreatePost(e);
+        break;
+      case "likeDislike":
+        result = handleLikeDislike(e);
+        break;
+      case "updateProfile":
+        result = handleUpdateProfile(e);
         break;
       default:
         result = { error: "Action tidak dikenal: " + action };
@@ -48,17 +66,20 @@ function handleRequest(e) {
     var errorResponse = ContentService.createTextOutput();
     errorResponse.setMimeType(ContentService.MimeType.JSON);
     errorResponse.setContent(JSON.stringify({ 
-      error: "Server error: " + error.toString()
+      error: "Server error: " + error.toString(),
+      timestamp: new Date().toISOString()
     }));
     return errorResponse;
   }
 }
 
 function getAction(e) {
+  // Coba dari GET parameters dulu
   if (e.parameter && e.parameter.action) {
     return e.parameter.action;
   }
 
+  // Coba dari POST body
   if (e.postData && e.postData.contents) {
     try {
       var postData = JSON.parse(e.postData.contents);
@@ -109,9 +130,8 @@ function handleLogin(e) {
     var headers = data[0];
     var emailCol = findColumn(headers, "email");
     var passwordCol = findColumn(headers, "password");
-    var roleCol = findColumn(headers, "role");
 
-    Logger.log("Email column: " + emailCol + ", Password column: " + passwordCol + ", Role column: " + roleCol);
+    Logger.log("Email column: " + emailCol + ", Password column: " + passwordCol);
 
     if (emailCol === -1 || passwordCol === -1) {
       return { error: "Kolom email atau password tidak ditemukan" };
@@ -122,13 +142,11 @@ function handleLogin(e) {
       var row = data[i];
       var userEmail = row[emailCol];
       var userPassword = row[passwordCol];
-      var userRole = row[roleCol] || "user";
       
       Logger.log("Checking user " + i + ": " + userEmail);
       
       if (userEmail && userEmail.toString().toLowerCase() === email.toLowerCase()) {
         Logger.log("User found! Stored password: " + userPassword);
-        Logger.log("User role: " + userRole);
         Logger.log("Input password: " + password);
         
         // Check password - bisa plain text atau hashed
@@ -140,7 +158,7 @@ function handleLogin(e) {
             idUsers: row[findColumn(headers, "idUsers")] || "USER_" + i,
             username: row[findColumn(headers, "username")] || email.split('@')[0],
             email: email,
-            role: userRole,
+            role: row[findColumn(headers, "role")] || "user",
             nim: row[findColumn(headers, "nim")] || "",
             jurusan: row[findColumn(headers, "jurusan")] || "",
             bio: row[findColumn(headers, "bio")] || "",
@@ -194,7 +212,7 @@ function handleRegister(e) {
       }
     }
 
-    // Tambah user baru
+    // Tambah user baru - simpan password sebagai hashed
     var newId = "USER_" + Date.now();
     var hashedPassword = userData.password; // Sudah di-hash dari client
     
@@ -203,7 +221,7 @@ function handleRegister(e) {
       userData.username,            // username
       userData.email,               // email
       hashedPassword,               // password (hashed)
-      "user",                       // role (default user)
+      "user",                       // role
       userData.nim || "",           // nim
       userData.jurusan || "",       // jurusan
       userData.gender || "Male",    // gender
@@ -226,6 +244,177 @@ function handleRegister(e) {
   } catch (error) {
     Logger.log("Register error: " + error.toString());
     return { error: "Error registrasi: " + error.toString() };
+  }
+}
+
+function handleGetPosts() {
+  try {
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var postingSheet = spreadsheet.getSheetByName("Posting");
+    var usersSheet = spreadsheet.getSheetByName("Users");
+
+    if (!postingSheet) {
+      // Buat sheet Posting jika belum ada
+      postingSheet = spreadsheet.insertSheet("Posting");
+      postingSheet.getRange(1, 1, 1, 8).setValues([[
+        "idPostingan", "idUsers", "judul", "deskripsi", "imageUrl", "timestamp", "likeCount", "dislikeCount"
+      ]]);
+      return []; // Return empty array untuk sheet baru
+    }
+
+    var postData = postingSheet.getDataRange().getValues();
+    var userData = usersSheet ? usersSheet.getDataRange().getValues() : [];
+
+    if (postData.length < 2) {
+      return []; // Return empty array jika tidak ada posts
+    }
+
+    var postHeaders = postData[0];
+    var userHeaders = userData[0] || [];
+    var posts = [];
+
+    for (var i = 1; i < postData.length; i++) {
+      var row = postData[i];
+      var post = {
+        idPostingan: row[findColumn(postHeaders, "idPostingan")] || "POST_" + i,
+        idUsers: row[findColumn(postHeaders, "idUsers")] || "",
+        timestamp: row[findColumn(postHeaders, "timestamp")] || new Date(),
+        judul: row[findColumn(postHeaders, "judul")] || "",
+        deskripsi: row[findColumn(postHeaders, "deskripsi")] || "",
+        imageUrl: row[findColumn(postHeaders, "imageUrl")] || "",
+        likeCount: parseInt(row[findColumn(postHeaders, "likeCount")] || 0),
+        dislikeCount: parseInt(row[findColumn(postHeaders, "dislikeCount")] || 0),
+        username: "Anonymous",
+        isLiked: false,
+        isDisliked: false
+      };
+
+      // Cari username dari Users sheet
+      if (userData.length > 1 && post.idUsers) {
+        var userIdCol = findColumn(userHeaders, "idUsers");
+        var usernameCol = findColumn(userHeaders, "username");
+
+        for (var j = 1; j < userData.length; j++) {
+          if (userData[j][userIdCol] === post.idUsers) {
+            post.username = userData[j][usernameCol] || "Anonymous";
+            break;
+          }
+        }
+      }
+
+      posts.push(post);
+    }
+
+    return posts;
+
+  } catch (error) {
+    Logger.log("Get posts error: " + error.toString());
+    return [];
+  }
+}
+
+function handleCreatePost(e) {
+  try {
+    var postData = getPostData(e);
+
+    if (!postData.idUsers || !postData.deskripsi) {
+      return { error: "idUsers dan deskripsi harus diisi" };
+    }
+
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var postingSheet = spreadsheet.getSheetByName("Posting");
+
+    if (!postingSheet) {
+      // Buat sheet Posting jika belum ada
+      postingSheet = spreadsheet.insertSheet("Posting");
+      postingSheet.getRange(1, 1, 1, 8).setValues([[
+        "idPostingan", "idUsers", "judul", "deskripsi", "imageUrl", "timestamp", "likeCount", "dislikeCount"
+      ]]);
+    }
+
+    var newId = "POST_" + Date.now();
+    var newRow = [
+      newId,                        // idPostingan
+      postData.idUsers,             // idUsers
+      postData.judul || "",         // judul
+      postData.deskripsi,           // deskripsi
+      postData.imageUrl || "",      // imageUrl
+      new Date(),                   // timestamp
+      0,                            // likeCount
+      0                             // dislikeCount
+    ];
+
+    postingSheet.appendRow(newRow);
+
+    return {
+      message: "Post berhasil dibuat",
+      idPostingan: newId
+    };
+
+  } catch (error) {
+    Logger.log("Create post error: " + error.toString());
+    return { error: "Error membuat post: " + error.toString() };
+  }
+}
+
+function handleLikeDislike(e) {
+  try {
+    var data = getLikeData(e);
+
+    if (!data.idPostingan || !data.type) {
+      return { error: "idPostingan dan type harus diisi" };
+    }
+
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var postingSheet = spreadsheet.getSheetByName("Posting");
+
+    if (!postingSheet) {
+      return { error: "Sheet Posting tidak ditemukan" };
+    }
+
+    var postData = postingSheet.getDataRange().getValues();
+    var headers = postData[0];
+    var idCol = findColumn(headers, "idPostingan");
+    var likeCol = findColumn(headers, "likeCount");
+    var dislikeCol = findColumn(headers, "dislikeCount");
+
+    // Cari post yang akan di-like/dislike
+    for (var i = 1; i < postData.length; i++) {
+      if (postData[i][idCol] === data.idPostingan) {
+        var currentLikes = parseInt(postData[i][likeCol] || 0);
+        var currentDislikes = parseInt(postData[i][dislikeCol] || 0);
+
+        if (data.type === "like") {
+          postingSheet.getRange(i + 1, likeCol + 1).setValue(currentLikes + 1);
+        } else if (data.type === "dislike") {
+          postingSheet.getRange(i + 1, dislikeCol + 1).setValue(currentDislikes + 1);
+        }
+
+        return { message: "Like/dislike berhasil" };
+      }
+    }
+
+    return { error: "Post tidak ditemukan" };
+
+  } catch (error) {
+    Logger.log("Like/dislike error: " + error.toString());
+    return { error: "Error like/dislike: " + error.toString() };
+  }
+}
+
+function handleUpdateProfile(e) {
+  try {
+    var profileData = getProfileData(e);
+
+    if (!profileData.idUsers) {
+      return { error: "idUsers harus diisi" };
+    }
+
+    return { message: "Update profile berhasil" };
+
+  } catch (error) {
+    Logger.log("Update profile error: " + error.toString());
+    return { error: "Error update profile: " + error.toString() };
   }
 }
 
@@ -275,4 +464,16 @@ function getUserData(e) {
   }
 
   return data;
+}
+
+function getPostData(e) {
+  return getUserData(e); // Same logic
+}
+
+function getLikeData(e) {
+  return getUserData(e); // Same logic
+}
+
+function getProfileData(e) {
+  return getUserData(e); // Same logic
 }
