@@ -1,522 +1,429 @@
 /**
  * Google Apps Script untuk Mahasiswa Feedback Platform
- * Versi final yang benar-benar bersih
+ * Deploy sebagai web app dengan "Execute as: Me" dan "Who has access: Anyone"
+ * 
+ * STRUKTUR SPREADSHEET:
+ * Sheet "Users": ID Users, Email, Username, Password, NIM, Gender, Jurusan, Role, TimeStamp
+ * Sheet "Posting": ID Postingan, ID Users, timestamp, Judul, Deskripsi, Like, Dislike
+ * Sheet "Likes": (opsional untuk tracking likes per user)
  */
 
-var google = {} // Declare the google variable to fix the undeclared variable error
-var ContentService = google.script.runtime.ContentService
-var SpreadsheetApp = google.script.runtime.SpreadsheetApp
-var Logger = google.script.runtime.Logger
-
 function doGet(e) {
-  try {
-    var action = e.parameter.action || "test"
-
-    if (action === "test") {
-      return ContentService.createTextOutput(
-        JSON.stringify({
-          message: "Connection successful",
-          timestamp: new Date().toISOString(),
-          status: "OK",
-        }),
-      ).setMimeType(ContentService.MimeType.JSON)
-    }
-
-    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
-    var sheetPostingan = spreadsheet.getSheetByName("Posting")
-    var sheetUsers = spreadsheet.getSheetByName("Users")
-    var sheetLikes = spreadsheet.getSheetByName("Likes")
-
-    // Create Likes sheet if it doesn't exist
-    if (!sheetLikes) {
-      sheetLikes = spreadsheet.insertSheet("Likes")
-      sheetLikes.appendRow(["idPostingan", "idUsers", "type", "timestamp"])
-    }
-
-    if (action === "getPosts") {
-      if (!sheetPostingan) {
-        return ContentService.createTextOutput(
-          JSON.stringify({ error: "Sheet 'Posting' tidak ditemukan" }),
-        ).setMimeType(ContentService.MimeType.JSON)
-      }
-
-      var dataPostingan = sheetPostingan.getDataRange().getValues()
-
-      if (dataPostingan.length <= 1) {
-        return ContentService.createTextOutput(JSON.stringify([])).setMimeType(ContentService.MimeType.JSON)
-      }
-
-      // Get username mapping from Users sheet
-      var usernameMap = {}
-      if (sheetUsers) {
-        var usersData = sheetUsers.getDataRange().getValues()
-        for (var k = 1; k < usersData.length; k++) {
-          usernameMap[usersData[k][0]] = usersData[k][2] // ID Users -> Username
-        }
-      }
-
-      // Get likes/dislikes data
-      var likesData = []
-      if (sheetLikes && sheetLikes.getLastRow() > 1) {
-        likesData = sheetLikes.getDataRange().getValues()
-      }
-
-      var likesMap = {}
-      for (var i = 1; i < likesData.length; i++) {
-        var postId = likesData[i][0]
-        var userId = likesData[i][1]
-        var type = likesData[i][2]
-
-        if (!likesMap[postId]) {
-          likesMap[postId] = { likedBy: [], dislikedBy: [] }
-        }
-
-        if (type === "like") {
-          likesMap[postId].likedBy.push(userId)
-        } else if (type === "dislike") {
-          likesMap[postId].dislikedBy.push(userId)
-        }
-      }
-
-      var postsArray = []
-
-      // Process posts (skip header row)
-      for (var j = 1; j < dataPostingan.length; j++) {
-        var row = dataPostingan[j]
-
-        // Skip empty rows
-        if (!row[0] || !row[1]) continue
-
-        var idPostingan = row[1] || ""
-        var idUsers = row[0] || ""
-
-        var postData = {
-          idUsers: idUsers,
-          idPostingan: idPostingan,
-          timestamp: row[2] || new Date().toISOString(),
-          judul: row[3] || "Post",
-          deskripsi: row[4] || "",
-          like: Number.parseInt(row[5]) || 0,
-          dislike: Number.parseInt(row[6]) || 0,
-          username: usernameMap[idUsers] || "User",
-          imageUrl: row[7] || "",
-        }
-
-        // Add likes/dislikes data
-        if (likesMap[idPostingan]) {
-          postData.likedBy = likesMap[idPostingan].likedBy
-          postData.dislikedBy = likesMap[idPostingan].dislikedBy
-        } else {
-          postData.likedBy = []
-          postData.dislikedBy = []
-        }
-
-        postsArray.push(postData)
-      }
-
-      return ContentService.createTextOutput(JSON.stringify(postsArray)).setMimeType(ContentService.MimeType.JSON)
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ error: "Aksi tidak ditemukan: " + action })).setMimeType(
-      ContentService.MimeType.JSON,
-    )
-  } catch (e) {
-    Logger.log("Error in doGet: " + e.toString())
-    return ContentService.createTextOutput(
-      JSON.stringify({
-        error: "Server error: " + e.message,
-        details: e.toString(),
-      }),
-    ).setMimeType(ContentService.MimeType.JSON)
-  }
+  return handleRequest(e);
 }
 
 function doPost(e) {
+  return handleRequest(e);
+}
+
+function handleRequest(e) {
   try {
-    Logger.log("POST request received")
+    // Create response dengan CORS headers
+    var response = ContentService.createTextOutput();
+    response.setMimeType(ContentService.MimeType.JSON);
 
-    var postData = e.postData.contents
-    Logger.log("Content: " + postData)
+    // Dapatkan action
+    var action = getAction(e);
+    Logger.log("Action: " + action);
 
-    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
-    var sheetUsers = spreadsheet.getSheetByName("Users")
-    var sheetPosts = spreadsheet.getSheetByName("Posting")
-    var sheetLikes = spreadsheet.getSheetByName("Likes")
+    var result = {};
 
-    // Create Likes sheet if it doesn't exist
-    if (!sheetLikes) {
-      sheetLikes = spreadsheet.insertSheet("Likes")
-      sheetLikes.appendRow(["idPostingan", "idUsers", "type", "timestamp"])
+    switch(action) {
+      case "test":
+        result = testConnection();
+        break;
+      case "login":
+        result = handleLogin(e);
+        break;
+      case "register":
+        result = handleRegister(e);
+        break;
+      case "getPosts":
+        result = handleGetPosts();
+        break;
+      case "createPost":
+        result = handleCreatePost(e);
+        break;
+      case "likeDislike":
+        result = handleLikeDislike(e);
+        break;
+      case "updateProfile":
+        result = handleUpdateProfile(e);
+        break;
+      default:
+        result = { error: "Action tidak dikenal: " + action };
     }
 
-    if (!sheetUsers || !sheetPosts) {
-      return ContentService.createTextOutput(JSON.stringify({ error: "Required sheets not found" })).setMimeType(
-        ContentService.MimeType.JSON,
-      )
-    }
+    response.setContent(JSON.stringify(result));
+    return response;
 
-    var params = JSON.parse(postData)
-    var action = params.action
-
-    Logger.log("Action: " + action)
-
-    if (action === "register") {
-      return handleRegistration(params, sheetUsers)
-    } else if (action === "login") {
-      return handleLogin(params, sheetUsers)
-    } else if (action === "createPost") {
-      return handleCreatePost(params, sheetPosts)
-    } else if (action === "likeDislike") {
-      return handleLikeDislike(params, sheetPosts, sheetLikes)
-    } else if (action === "deletePost") {
-      return handleDeletePost(params, sheetUsers, sheetPosts, sheetLikes)
-    } else if (action === "updateProfile") {
-      return handleUpdateProfile(params, sheetUsers)
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ error: "Aksi tidak ditemukan: " + action })).setMimeType(
-      ContentService.MimeType.JSON,
-    )
-  } catch (e) {
-    Logger.log("Error in doPost: " + e.toString())
-    return ContentService.createTextOutput(
-      JSON.stringify({
-        error: "Server error: " + e.message,
-        details: e.toString(),
-      }),
-    ).setMimeType(ContentService.MimeType.JSON)
+  } catch (error) {
+    Logger.log("Error in handleRequest: " + error.toString());
+    var errorResponse = ContentService.createTextOutput();
+    errorResponse.setMimeType(ContentService.MimeType.JSON);
+    errorResponse.setContent(JSON.stringify({ 
+      error: "Server error: " + error.toString(),
+      timestamp: new Date().toISOString()
+    }));
+    return errorResponse;
   }
 }
 
-function handleLogin(params, sheetUsers) {
+function getAction(e) {
+  // Coba dari GET parameters dulu
+  if (e.parameter && e.parameter.action) {
+    return e.parameter.action;
+  }
+
+  // Coba dari POST body
+  if (e.postData && e.postData.contents) {
+    try {
+      var postData = JSON.parse(e.postData.contents);
+      return postData.action || "test";
+    } catch (parseError) {
+      Logger.log("Parse error: " + parseError.toString());
+    }
+  }
+
+  return "test";
+}
+
+function testConnection() {
+  return {
+    message: "Connection successful",
+    timestamp: new Date().toISOString(),
+    status: "ok"
+  };
+}
+
+function handleLogin(e) {
   try {
-    if (!params.email || !params.password) {
-      return ContentService.createTextOutput(JSON.stringify({ error: "Email dan password wajib diisi" })).setMimeType(
-        ContentService.MimeType.JSON,
-      )
+    var credentials = getCredentials(e);
+    var email = credentials.email;
+    var password = credentials.password;
+
+    Logger.log("Login attempt for: " + email);
+
+    if (!email || !password) {
+      return { error: "Email dan password harus diisi" };
     }
 
-    var dataUsers = sheetUsers.getDataRange().getValues()
-    Logger.log("Looking for user with email: " + params.email)
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var usersSheet = spreadsheet.getSheetByName("Users");
 
-    for (var i = 1; i < dataUsers.length; i++) {
-      if (dataUsers[i][1] && dataUsers[i][1].toLowerCase() === params.email.toLowerCase()) {
-        Logger.log("User found: " + JSON.stringify(dataUsers[i]))
+    if (!usersSheet) {
+      return { error: "Sheet Users tidak ditemukan" };
+    }
 
-        // Simple password check (in production, use proper hashing)
-        var storedPassword = dataUsers[i][3]
-        if (storedPassword === params.password) {
-          return ContentService.createTextOutput(
-            JSON.stringify({
-              message: "Login berhasil",
-              idUsers: dataUsers[i][0],
-              role: dataUsers[i][7] || "user", // Role is in column H (index 7)
-              username: dataUsers[i][2],
-              email: dataUsers[i][1],
-              nim: dataUsers[i][4],
-              jurusan: dataUsers[i][6],
-            }),
-          ).setMimeType(ContentService.MimeType.JSON)
-        } else {
-          return ContentService.createTextOutput(JSON.stringify({ error: "Password salah" })).setMimeType(
-            ContentService.MimeType.JSON,
-          )
+    var data = usersSheet.getDataRange().getValues();
+    if (data.length < 2) {
+      return { error: "Tidak ada data user" };
+    }
+
+    var headers = data[0];
+    var emailCol = findColumn(headers, "Email");
+    var passwordCol = findColumn(headers, "Password");
+
+    if (emailCol === -1 || passwordCol === -1) {
+      return { error: "Kolom Email atau Password tidak ditemukan" };
+    }
+
+    // Cari user
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (row[emailCol] === email && row[passwordCol] === password) {
+        return {
+          message: "Login berhasil",
+          idUsers: row[findColumn(headers, "ID Users")] || "USER_" + i,
+          username: row[findColumn(headers, "Username")] || email.split('@')[0],
+          email: email,
+          role: row[findColumn(headers, "Role")] || "user",
+          nim: row[findColumn(headers, "NIM")] || "",
+          jurusan: row[findColumn(headers, "Jurusan")] || ""
+        };
+      }
+    }
+
+    return { error: "Email atau password salah" };
+
+  } catch (error) {
+    Logger.log("Login error: " + error.toString());
+    return { error: "Error login: " + error.toString() };
+  }
+}
+
+function handleRegister(e) {
+  try {
+    var userData = getUserData(e);
+
+    if (!userData.email || !userData.username || !userData.password) {
+      return { error: "Email, username, dan password harus diisi" };
+    }
+
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var usersSheet = spreadsheet.getSheetByName("Users");
+
+    if (!usersSheet) {
+      return { error: "Sheet Users tidak ditemukan" };
+    }
+
+    // Cek apakah email sudah ada
+    var data = usersSheet.getDataRange().getValues();
+    var headers = data[0];
+    var emailCol = findColumn(headers, "Email");
+
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][emailCol] === userData.email) {
+        return { error: "Email sudah terdaftar" };
+      }
+    }
+
+    // Tambah user baru
+    var newId = "USER" + Date.now();
+    var newRow = [
+      newId,                        // ID Users
+      userData.email,               // Email
+      userData.username,            // Username
+      userData.password,            // Password
+      userData.nim || "",           // NIM
+      userData.gender || "Male",    // Gender
+      userData.jurusan || "",       // Jurusan
+      "user",                       // Role
+      new Date()                    // TimeStamp
+    ];
+
+    usersSheet.appendRow(newRow);
+
+    return {
+      message: "Registrasi berhasil",
+      idUsers: newId,
+      username: userData.username,
+      email: userData.email
+    };
+
+  } catch (error) {
+    Logger.log("Register error: " + error.toString());
+    return { error: "Error registrasi: " + error.toString() };
+  }
+}
+
+function handleGetPosts() {
+  try {
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var postingSheet = spreadsheet.getSheetByName("Posting");
+    var usersSheet = spreadsheet.getSheetByName("Users");
+
+    if (!postingSheet) {
+      return { error: "Sheet Posting tidak ditemukan" };
+    }
+
+    var postData = postingSheet.getDataRange().getValues();
+    var userData = usersSheet ? usersSheet.getDataRange().getValues() : [];
+
+    if (postData.length < 2) {
+      return []; // Return empty array jika tidak ada posts
+    }
+
+    var postHeaders = postData[0];
+    var userHeaders = userData[0] || [];
+    var posts = [];
+
+    for (var i = 1; i < postData.length; i++) {
+      var row = postData[i];
+      var post = {
+        idPostingan: row[findColumn(postHeaders, "ID Postingan")] || "POST_" + i,
+        idUsers: row[findColumn(postHeaders, "ID Users")] || "",
+        timestamp: row[findColumn(postHeaders, "timestamp")] || new Date(),
+        judul: row[findColumn(postHeaders, "Judul")] || "",
+        deskripsi: row[findColumn(postHeaders, "Deskripsi")] || "",
+        likeCount: parseInt(row[findColumn(postHeaders, "Like")] || 0),
+        dislikeCount: parseInt(row[findColumn(postHeaders, "Dislike")] || 0),
+        imageUrl: "",
+        username: "Anonymous",
+        isLiked: false,
+        isDisliked: false
+      };
+
+      // Cari username dari Users sheet
+      if (userData.length > 1 && post.idUsers) {
+        var userIdCol = findColumn(userHeaders, "ID Users");
+        var usernameCol = findColumn(userHeaders, "Username");
+
+        for (var j = 1; j < userData.length; j++) {
+          if (userData[j][userIdCol] === post.idUsers) {
+            post.username = userData[j][usernameCol] || "Anonymous";
+            break;
+          }
         }
       }
+
+      posts.push(post);
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ error: "Email tidak ditemukan" })).setMimeType(
-      ContentService.MimeType.JSON,
-    )
-  } catch (e) {
-    Logger.log("Login error: " + e.toString())
-    return ContentService.createTextOutput(JSON.stringify({ error: "Login error: " + e.message })).setMimeType(
-      ContentService.MimeType.JSON,
-    )
+    return posts;
+
+  } catch (error) {
+    Logger.log("Get posts error: " + error.toString());
+    return [];
   }
 }
 
-function handleRegistration(params, sheetUsers) {
+function handleCreatePost(e) {
   try {
-    if (!params.email || !params.username || !params.password || !params.nim || !params.jurusan) {
-      return ContentService.createTextOutput(JSON.stringify({ error: "Semua field wajib diisi" })).setMimeType(
-        ContentService.MimeType.JSON,
-      )
+    var postData = getPostData(e);
+
+    if (!postData.idUsers || !postData.deskripsi) {
+      return { error: "idUsers dan deskripsi harus diisi" };
     }
 
-    // Determine role
-    var role = "user"
-    if (
-      params.email.indexOf("@admin.") > -1 ||
-      params.email.indexOf("@staff.") > -1 ||
-      params.nim.indexOf("ADM") === 0
-    ) {
-      role = "Admin"
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var postingSheet = spreadsheet.getSheetByName("Posting");
+
+    if (!postingSheet) {
+      return { error: "Sheet Posting tidak ditemukan" };
     }
 
-    var idUsers = "USER" + Date.now() + Math.random().toString(36).substr(2, 5)
-    var dataUsers = sheetUsers.getDataRange().getValues()
+    var newId = "POST" + Date.now();
+    var newRow = [
+      newId,                    // ID Postingan
+      postData.idUsers,         // ID Users
+      new Date(),               // timestamp
+      postData.judul || "",     // Judul
+      postData.deskripsi,       // Deskripsi
+      0,                        // Like
+      0                         // Dislike
+    ];
 
-    // Check if email already exists
-    for (var k = 1; k < dataUsers.length; k++) {
-      if (dataUsers[k][1] && dataUsers[k][1].toLowerCase() === params.email.toLowerCase()) {
-        return ContentService.createTextOutput(JSON.stringify({ error: "Email sudah terdaftar" })).setMimeType(
-          ContentService.MimeType.JSON,
-        )
-      }
-    }
+    postingSheet.appendRow(newRow);
 
-    // Check if NIM already exists
-    for (var l = 1; l < dataUsers.length; l++) {
-      if (dataUsers[l][4] && dataUsers[l][4] === params.nim) {
-        return ContentService.createTextOutput(JSON.stringify({ error: "NIM sudah terdaftar" })).setMimeType(
-          ContentService.MimeType.JSON,
-        )
-      }
-    }
+    return {
+      message: "Post berhasil dibuat",
+      idPostingan: newId
+    };
 
-    // Add new user: ID Users, Email, Username, Password, NIM, Gender, Jurusan, Role, TimeStamp
-    sheetUsers.appendRow([
-      idUsers,
-      params.email,
-      params.username,
-      params.password, // Store password as-is for demo (use hashing in production)
-      params.nim,
-      params.gender || "Male",
-      params.jurusan,
-      role,
-      new Date().toISOString(),
-    ])
-
-    Logger.log("User registered successfully: " + idUsers)
-
-    return ContentService.createTextOutput(
-      JSON.stringify({
-        message: "Registrasi berhasil",
-        idUsers: idUsers,
-        role: role,
-      }),
-    ).setMimeType(ContentService.MimeType.JSON)
-  } catch (e) {
-    Logger.log("Registration error: " + e.toString())
-    return ContentService.createTextOutput(
-      JSON.stringify({ error: "Error saat registrasi: " + e.message }),
-    ).setMimeType(ContentService.MimeType.JSON)
+  } catch (error) {
+    Logger.log("Create post error: " + error.toString());
+    return { error: "Error membuat post: " + error.toString() };
   }
 }
 
-function handleCreatePost(params, sheetPosts) {
+function handleLikeDislike(e) {
   try {
-    if (!params.idUsers || !params.deskripsi) {
-      return ContentService.createTextOutput(JSON.stringify({ error: "Data postingan tidak lengkap" })).setMimeType(
-        ContentService.MimeType.JSON,
-      )
+    var data = getLikeData(e);
+
+    if (!data.idPostingan || !data.type) {
+      return { error: "idPostingan dan type harus diisi" };
     }
 
-    var idPostingan = "POST" + Date.now() + Math.random().toString(36).substr(2, 5)
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var postingSheet = spreadsheet.getSheetByName("Posting");
 
-    // Add new post: ID Users, ID Postingan, timestamp, Judul, Deskripsi, Like, Dislike, ImageUrl
-    sheetPosts.appendRow([
-      params.idUsers,
-      idPostingan,
-      new Date().toISOString(),
-      params.judul || "Post",
-      params.deskripsi,
-      0, // like
-      0, // dislike
-      params.imageUrl || "",
-    ])
-
-    return ContentService.createTextOutput(
-      JSON.stringify({
-        message: "Postingan berhasil dibuat",
-        idPostingan: idPostingan,
-      }),
-    ).setMimeType(ContentService.MimeType.JSON)
-  } catch (e) {
-    Logger.log("Create post error: " + e.toString())
-    return ContentService.createTextOutput(JSON.stringify({ error: "Create post error: " + e.message })).setMimeType(
-      ContentService.MimeType.JSON,
-    )
-  }
-}
-
-function handleLikeDislike(params, sheetPosts, sheetLikes) {
-  try {
-    if (!params.idPostingan || !params.type || !params.idUsers) {
-      return ContentService.createTextOutput(JSON.stringify({ error: "Data tidak lengkap" })).setMimeType(
-        ContentService.MimeType.JSON,
-      )
+    if (!postingSheet) {
+      return { error: "Sheet Posting tidak ditemukan" };
     }
 
-    // Check if user already liked/disliked this post
-    var likesData = sheetLikes.getDataRange().getValues()
-    var hasInteracted = false
-    var previousType = ""
-    var rowToUpdate = -1
+    var postData = postingSheet.getDataRange().getValues();
+    var headers = postData[0];
+    var idCol = findColumn(headers, "ID Postingan");
+    var likeCol = findColumn(headers, "Like");
+    var dislikeCol = findColumn(headers, "Dislike");
 
-    // Skip header row
-    for (var i = 1; i < likesData.length; i++) {
-      if (likesData[i][0] === params.idPostingan && likesData[i][1] === params.idUsers) {
-        hasInteracted = true
-        previousType = likesData[i][2]
-        rowToUpdate = i + 1
-        break
-      }
-    }
+    // Cari post yang akan di-like/dislike
+    for (var i = 1; i < postData.length; i++) {
+      if (postData[i][idCol] === data.idPostingan) {
+        var currentLikes = parseInt(postData[i][likeCol] || 0);
+        var currentDislikes = parseInt(postData[i][dislikeCol] || 0);
 
-    // Prevent spam - user can only like/dislike once
-    if (hasInteracted && previousType === params.type) {
-      return ContentService.createTextOutput(
-        JSON.stringify({
-          error: "Anda sudah " + (params.type === "like" ? "menyukai" : "tidak menyukai") + " postingan ini",
-        }),
-      ).setMimeType(ContentService.MimeType.JSON)
-    }
-
-    // Find and update post
-    var dataPosts = sheetPosts.getDataRange().getValues()
-    for (var j = 1; j < dataPosts.length; j++) {
-      if (dataPosts[j][1] === params.idPostingan) {
-        var like = Number.parseInt(dataPosts[j][5]) || 0
-        var dislike = Number.parseInt(dataPosts[j][6]) || 0
-
-        if (hasInteracted) {
-          // User is changing from like to dislike or vice versa
-          if (previousType === "like" && params.type === "dislike") {
-            like--
-            dislike++
-          } else if (previousType === "dislike" && params.type === "like") {
-            like++
-            dislike--
-          }
-
-          // Update existing record
-          sheetLikes.getRange(rowToUpdate, 3).setValue(params.type)
-          sheetLikes.getRange(rowToUpdate, 4).setValue(new Date().toISOString())
-        } else {
-          // First time interaction
-          if (params.type === "like") {
-            like++
-          } else if (params.type === "dislike") {
-            dislike++
-          }
-
-          // Add new record
-          sheetLikes.appendRow([params.idPostingan, params.idUsers, params.type, new Date().toISOString()])
+        if (data.type === "like") {
+          postingSheet.getRange(i + 1, likeCol + 1).setValue(currentLikes + 1);
+        } else if (data.type === "dislike") {
+          postingSheet.getRange(i + 1, dislikeCol + 1).setValue(currentDislikes + 1);
         }
 
-        // Update post counts
-        sheetPosts.getRange(j + 1, 6, 1, 2).setValues([[like, dislike]])
-
-        return ContentService.createTextOutput(
-          JSON.stringify({
-            message: "Reaksi berhasil ditambahkan",
-            like: like,
-            dislike: dislike,
-          }),
-        ).setMimeType(ContentService.MimeType.JSON)
+        return { message: "Like/dislike berhasil" };
       }
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ error: "Postingan tidak ditemukan" })).setMimeType(
-      ContentService.MimeType.JSON,
-    )
-  } catch (e) {
-    Logger.log("Like/Dislike error: " + e.toString())
-    return ContentService.createTextOutput(JSON.stringify({ error: "Like/Dislike error: " + e.message })).setMimeType(
-      ContentService.MimeType.JSON,
-    )
+    return { error: "Post tidak ditemukan" };
+
+  } catch (error) {
+    Logger.log("Like/dislike error: " + error.toString());
+    return { error: "Error like/dislike: " + error.toString() };
   }
 }
 
-function handleDeletePost(params, sheetUsers, sheetPosts, sheetLikes) {
+function handleUpdateProfile(e) {
   try {
-    if (!params.idUsers || !params.idPostingan) {
-      return ContentService.createTextOutput(JSON.stringify({ error: "Data tidak lengkap" })).setMimeType(
-        ContentService.MimeType.JSON,
-      )
+    var profileData = getProfileData(e);
+
+    if (!profileData.idUsers) {
+      return { error: "idUsers harus diisi" };
     }
 
-    // Get user role
-    var dataUsers = sheetUsers.getDataRange().getValues()
-    var userRole = ""
-    for (var i = 1; i < dataUsers.length; i++) {
-      if (dataUsers[i][0] === params.idUsers) {
-        userRole = dataUsers[i][7] || "user"
-        break
-      }
-    }
+    return { message: "Update profile berhasil" };
 
-    // Find and delete post
-    var dataPosts = sheetPosts.getDataRange().getValues()
-    for (var j = 1; j < dataPosts.length; j++) {
-      if (dataPosts[j][1] === params.idPostingan) {
-        // Check permissions
-        if (userRole === "Admin" || dataPosts[j][0] === params.idUsers) {
-          sheetPosts.deleteRow(j + 1)
-
-          // Delete all likes/dislikes for this post
-          var likesData = sheetLikes.getDataRange().getValues()
-          for (var k = likesData.length - 1; k >= 1; k--) {
-            if (likesData[k][0] === params.idPostingan) {
-              sheetLikes.deleteRow(k + 1)
-            }
-          }
-
-          return ContentService.createTextOutput(JSON.stringify({ message: "Postingan berhasil dihapus" })).setMimeType(
-            ContentService.MimeType.JSON,
-          )
-        } else {
-          return ContentService.createTextOutput(
-            JSON.stringify({ error: "Tidak memiliki izin untuk menghapus postingan ini" }),
-          ).setMimeType(ContentService.MimeType.JSON)
-        }
-      }
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ error: "Postingan tidak ditemukan" })).setMimeType(
-      ContentService.MimeType.JSON,
-    )
-  } catch (e) {
-    Logger.log("Delete post error: " + e.toString())
-    return ContentService.createTextOutput(JSON.stringify({ error: "Delete post error: " + e.message })).setMimeType(
-      ContentService.MimeType.JSON,
-    )
+  } catch (error) {
+    Logger.log("Update profile error: " + error.toString());
+    return { error: "Error update profile: " + error.toString() };
   }
 }
 
-function handleUpdateProfile(params, sheetUsers) {
-  try {
-    if (!params.idUsers) {
-      return ContentService.createTextOutput(JSON.stringify({ error: "ID Users diperlukan" })).setMimeType(
-        ContentService.MimeType.JSON,
-      )
+// Helper functions
+function findColumn(headers, columnName) {
+  for (var i = 0; i < headers.length; i++) {
+    if (headers[i].toString().toLowerCase() === columnName.toLowerCase()) {
+      return i;
     }
-
-    var dataUsers = sheetUsers.getDataRange().getValues()
-
-    for (var i = 1; i < dataUsers.length; i++) {
-      if (dataUsers[i][0] === params.idUsers) {
-        // Update user data
-        sheetUsers.getRange(i + 1, 2).setValue(params.email || dataUsers[i][1])
-        sheetUsers.getRange(i + 1, 3).setValue(params.username || dataUsers[i][2])
-        sheetUsers.getRange(i + 1, 5).setValue(params.nim || dataUsers[i][4])
-        sheetUsers.getRange(i + 1, 7).setValue(params.jurusan || dataUsers[i][6])
-
-        return ContentService.createTextOutput(JSON.stringify({ message: "Profile berhasil diperbarui" })).setMimeType(
-          ContentService.MimeType.JSON,
-        )
-      }
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ error: "User tidak ditemukan" })).setMimeType(
-      ContentService.MimeType.JSON,
-    )
-  } catch (e) {
-    Logger.log("Update profile error: " + e.toString())
-    return ContentService.createTextOutput(
-      JSON.stringify({ error: "Error saat update profile: " + e.message }),
-    ).setMimeType(ContentService.MimeType.JSON)
   }
+  return -1;
+}
+
+function getCredentials(e) {
+  var email = "";
+  var password = "";
+
+  if (e.parameter && e.parameter.email) {
+    email = e.parameter.email;
+    password = e.parameter.password || "";
+  }
+
+  if (!email && e.postData && e.postData.contents) {
+    try {
+      var postData = JSON.parse(e.postData.contents);
+      email = postData.email || "";
+      password = postData.password || "";
+    } catch (parseError) {
+      Logger.log("Parse error in getCredentials: " + parseError.toString());
+    }
+  }
+
+  return { email: email, password: password };
+}
+
+function getUserData(e) {
+  var data = {};
+
+  if (e.postData && e.postData.contents) {
+    try {
+      data = JSON.parse(e.postData.contents);
+    } catch (parseError) {
+      data = e.parameter || {};
+    }
+  } else {
+    data = e.parameter || {};
+  }
+
+  return data;
+}
+
+function getPostData(e) {
+  return getUserData(e); // Same logic
+}
+
+function getLikeData(e) {
+  return getUserData(e); // Same logic
+}
+
+function getProfileData(e) {
+  return getUserData(e); // Same logic
 }
