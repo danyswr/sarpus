@@ -37,12 +37,8 @@ export default function LoginPage() {
       console.log("Login result:", success)
 
       if (success) {
-        console.log("Login successful, should redirect now...")
-        // Set auth cookie for middleware
-        document.cookie = `auth-token=authenticated; path=/; max-age=86400` // 24 hours
-
-        // Let the auth context handle the redirect
-        // Don't manually redirect here to avoid conflicts
+        console.log("Login successful, auth context will handle redirect...")
+        // Auth context will handle the redirect automatically
       } else {
         setError("Email atau password salah")
       }

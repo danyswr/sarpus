@@ -51,19 +51,11 @@ export default function DashboardPage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (!authLoading) {
-      // If not logged in, redirect to login
-      if (!user) {
-        router.push("/login")
-        return
-      }
-
-      // If user is admin, redirect to admin page
-      if (user.role && user.role.toLowerCase() === "admin") {
-        router.push("/admin")
-      }
+    if (!authLoading && !user) {
+      // Only redirect to login if user is not authenticated
+      window.location.href = "/login"
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading])
 
   const fetchPosts = async () => {
     try {

@@ -29,18 +29,16 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!isLoading) {
-      // If not logged in, redirect to login
       if (!user) {
-        router.push("/login")
+        window.location.href = "/login"
         return
       }
 
-      // If user is not admin, redirect to dashboard
       if (!user.role || user.role.toLowerCase() !== "admin") {
-        router.push("/dashboard")
+        window.location.href = "/dashboard"
       }
     }
-  }, [user, isLoading, router])
+  }, [user, isLoading])
 
   const fetchPosts = async () => {
     try {

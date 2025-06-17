@@ -2,17 +2,24 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 export function middleware(request: NextRequest) {
+  // Skip middleware for login and register pages
+  if (request.nextUrl.pathname.startsWith("/login") || 
+      request.nextUrl.pathname.startsWith("/register") ||
+      request.nextUrl.pathname === "/") {
+    return NextResponse.next()
+  }
+
   // Check if user is accessing protected routes
   const protectedPaths = ["/dashboard", "/profile", "/admin"]
   const isProtectedPath = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path))
 
   if (isProtectedPath) {
-    // Check if user has auth token in cookies or headers
+    // Check if user has auth token in cookies
     const authCookie = request.cookies.get("auth-token")
     const userCookie = request.cookies.get("user-data")
 
     // If no auth data, redirect to login
-    if (!authCookie && !userCookie) {
+    if (!authCookie || !userCookie) {
       const loginUrl = new URL("/login", request.url)
       loginUrl.searchParams.set("redirect", request.nextUrl.pathname)
       return NextResponse.redirect(loginUrl)
@@ -20,18 +27,16 @@ export function middleware(request: NextRequest) {
 
     // Check role-based access for admin routes
     if (request.nextUrl.pathname.startsWith("/admin")) {
-      if (userCookie) {
-        try {
-          const userData = JSON.parse(decodeURIComponent(userCookie.value))
-          if (userData.role !== "admin") {
-            // Redirect non-admin users to dashboard
-            return NextResponse.redirect(new URL("/dashboard", request.url))
-          }
-        } catch (error) {
-          // Invalid user data, redirect to login
-          const loginUrl = new URL("/login", request.url)
-          return NextResponse.redirect(loginUrl)
+      try {
+        const userData = JSON.parse(decodeURIComponent(userCookie.value))
+        if (userData.role?.toLowerCase() !== "admin") {
+          // Redirect non-admin users to dashboard
+          return NextResponse.redirect(new URL("/dashboard", request.url))
         }
+      } catch (error) {
+        // Invalid user data, redirect to login
+        const loginUrl = new URL("/login", request.url)
+        return NextResponse.redirect(loginUrl)
       }
     }
   }

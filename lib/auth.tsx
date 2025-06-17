@@ -36,13 +36,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const userData = JSON.parse(savedUser)
         setUser(userData)
 
-        // Check role and redirect if needed
+        // Only redirect on initial load if we're on the root page
         if (userData.role && window.location.pathname === "/") {
-          if (userData.role.toLowerCase() === "admin") {
-            router.push("/admin")
-          } else {
-            router.push("/dashboard")
-          }
+          setTimeout(() => {
+            if (userData.role.toLowerCase() === "admin") {
+              router.push("/admin")
+            } else {
+              router.push("/dashboard")
+            }
+          }, 100)
         }
       } catch (error) {
         console.error("Error parsing saved user:", error)
@@ -91,17 +93,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       document.cookie = `auth-token=authenticated; path=/; max-age=86400`
       document.cookie = `user-data=${encodeURIComponent(JSON.stringify(userData))}; path=/; max-age=86400`
 
-      // Force redirect dengan delay kecil untuk memastikan state ter-update
-      setTimeout(() => {
-        // Redirect based on role
-        if (userData.role && userData.role.toLowerCase() === "admin") {
-          console.log("Redirecting to admin dashboard")
-          router.push("/admin")
-        } else {
-          console.log("Redirecting to user dashboard")
-          router.push("/dashboard")
-        }
-      }, 100)
+      // Immediate redirect after successful login
+      console.log("Login successful, redirecting...")
+      if (userData.role && userData.role.toLowerCase() === "admin") {
+        console.log("Redirecting to admin dashboard")
+        window.location.href = "/admin"
+      } else {
+        console.log("Redirecting to user dashboard") 
+        window.location.href = "/dashboard"
+      }
 
       return true
     } catch (error) {
