@@ -13,7 +13,13 @@ import {
 } from "./mock-api"
 
 // Helper untuk menentukan apakah menggunakan mock API atau real API
-const useMockAPI = () => API_URL === "YOUR_SCRIPT_ID_HERE" || process.env.NODE_ENV === "development"
+const useMockAPI = () => API_URL === "YOUR_SCRIPT_ID_HERE" // Remove development check to use real API
+
+// Simple password hashing function
+async function hashPassword(password: string): Promise<string> {
+  // Use btoa for consistency with register page
+  return btoa(password)
+}
 
 // Test connection to API
 export async function testConnection() {
@@ -89,7 +95,8 @@ export async function registerUser(userData: {
     }
 
     console.log('Registering user:', userData)
-    const hashedPassword = await hashPassword(userData.password)
+    // Use the same hashing as register page for consistency
+    const hashedPassword = btoa(userData.password)
 
     const payload = {
       action: 'register',
@@ -112,11 +119,18 @@ export async function registerUser(userData: {
     })
 
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Registration failed:', errorText)
       throw new Error(`HTTP error! status: ${response.status}`)
     }
 
     const result = await response.json()
     console.log('Registration response:', result)
+    
+    if (result.error) {
+      throw new Error(result.error)
+    }
+    
     return result
   } catch (error) {
     console.error("Registration error:", error)
