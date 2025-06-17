@@ -91,12 +91,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       document.cookie = `auth-token=authenticated; path=/; max-age=86400`
       document.cookie = `user-data=${encodeURIComponent(JSON.stringify(userData))}; path=/; max-age=86400`
 
-      // Redirect based on role
-      if (userData.role.toLowerCase() === "admin") {
-        router.push("/admin")
-      } else {
-        router.push("/dashboard")
-      }
+      // Force redirect dengan delay kecil untuk memastikan state ter-update
+      setTimeout(() => {
+        // Redirect based on role
+        if (userData.role && userData.role.toLowerCase() === "admin") {
+          console.log("Redirecting to admin dashboard")
+          router.push("/admin")
+        } else {
+          console.log("Redirecting to user dashboard")
+          router.push("/dashboard")
+        }
+      }, 100)
 
       return true
     } catch (error) {

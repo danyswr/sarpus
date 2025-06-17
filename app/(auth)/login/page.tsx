@@ -32,14 +32,17 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
+      console.log("Starting login process...")
       const success = await login(email, password)
+      console.log("Login result:", success)
 
       if (success) {
+        console.log("Login successful, should redirect now...")
         // Set auth cookie for middleware
         document.cookie = `auth-token=authenticated; path=/; max-age=86400` // 24 hours
 
-        const redirectPath = searchParams.get("redirect") || "/dashboard"
-        router.push(redirectPath)
+        // Let the auth context handle the redirect
+        // Don't manually redirect here to avoid conflicts
       } else {
         setError("Email atau password salah")
       }

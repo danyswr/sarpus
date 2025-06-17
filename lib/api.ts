@@ -35,7 +35,7 @@ export async function testConnection() {
     }
 
     console.log("Testing connection to:", API_URL)
-    
+
     // Simple GET request with reasonable timeout
     const response = await fetch(`${API_URL}?action=test&_=${Date.now()}`, {
       method: "GET",
@@ -45,7 +45,7 @@ export async function testConnection() {
     })
 
     console.log("Test response status:", response.status)
-    
+
     if (response.ok) {
       const result = await response.json()
       console.log("Test response:", result)
@@ -58,11 +58,11 @@ export async function testConnection() {
     }
   } catch (error) {
     console.error("Connection test failed:", error)
-    
+
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
       throw new Error("Network error. Pastikan:\n1. URL Google Apps Script benar\n2. Web app sudah di-deploy dengan akses 'Anyone'\n3. Koneksi internet stabil")
     }
-    
+
     throw new Error("Connection failed: " + (error instanceof Error ? error.message : String(error)))
   }
 }
@@ -85,7 +85,7 @@ export async function loginUser(email: string, password: string) {
     console.log('Trying GET request for login')
     try {
       const getUrl = `${API_URL}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(hashedPassword)}&_=${Date.now()}`
-      
+
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
 
@@ -96,17 +96,17 @@ export async function loginUser(email: string, password: string) {
         },
         signal: controller.signal
       })
-      
+
       clearTimeout(timeoutId)
-      
+
       if (response.ok) {
         const result = await response.json()
         console.log('GET Login response:', result)
-        
+
         if (result.error) {
           throw new Error(result.error)
         }
-        
+
         return {
           message: "Login berhasil",
           idUsers: result.idUsers || "USER_" + Date.now(),
@@ -147,7 +147,7 @@ export async function loginUser(email: string, password: string) {
       }
     } catch (getError) {
       console.log('GET login failed, trying POST:', getError)
-      
+
       // Fallback to POST
       const payload = {
         action: 'login',
@@ -174,11 +174,11 @@ export async function loginUser(email: string, password: string) {
       if (response.ok) {
         const result = await response.json()
         console.log('POST Login response:', result)
-        
+
         if (result.error) {
           throw new Error(result.error)
         }
-        
+
         return {
           message: "Login berhasil",
           idUsers: result.idUsers || "USER_" + Date.now(),
@@ -217,22 +217,22 @@ export async function loginUser(email: string, password: string) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
     }
-    
+
   } catch (error) {
     console.error("Login error:", error)
-    
+
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
       throw new Error("Network error. Pastikan:\n1. URL Google Apps Script sudah benar\n2. Web app sudah di-deploy dengan 'Execute as: Me'\n3. Akses diset ke 'Anyone'\n4. Google Apps Script sudah di-save dan di-deploy ulang")
     }
-    
+
     if (error.name === 'AbortError') {
       throw new Error("Koneksi timeout. Coba lagi beberapa saat.")
     }
-    
+
     if (error instanceof Error) {
       throw error
     }
-    
+
     throw new Error("Login error: " + String(error))
   }
 }
@@ -255,7 +255,7 @@ export async function registerUser(userData: {
 
     console.log('Using real API for registration')
     console.log('Registering user:', userData)
-    
+
     // Use the same hashing as register page for consistency
     const hashedPassword = btoa(userData.password)
 
@@ -274,22 +274,22 @@ export async function registerUser(userData: {
     // Try GET request first
     try {
       const getUrl = `${API_URL}?action=register&email=${encodeURIComponent(userData.email)}&username=${encodeURIComponent(userData.username)}&password=${encodeURIComponent(hashedPassword)}&nim=${encodeURIComponent(userData.nim)}&jurusan=${encodeURIComponent(userData.jurusan)}&gender=${encodeURIComponent(userData.gender || 'Male')}&_=${Date.now()}`
-      
+
       const getResponse = await fetch(getUrl, {
         method: "GET",
         headers: {
           "Accept": "application/json",
         },
       })
-      
+
       if (getResponse.ok) {
         const result = await getResponse.json()
         console.log('GET Registration response:', result)
-        
+
         if (result.error) {
           throw new Error(result.error)
         }
-        
+
         return result
       }
     } catch (getError) {
@@ -312,9 +312,12 @@ export async function registerUser(userData: {
     // Dengan no-cors, kita tidak bisa membaca response body
     // Tapi jika tidak ada error, asumsikan berhasil
     if (response.type === 'opaque') {
+      // Assuming login successful due to no-cors limitations
+      console.log("Assuming login successful due to no-cors limitations")
       return {
-        message: "Registrasi berhasil",
-        idUsers: "USER_" + Date.now(),
+        message: "Login berhasil (mode terbatas)",
+        idUsers: "USER_TEMP_" + Date.now(),
+        role: "user",
         username: userData.username,
         email: userData.email
       }
@@ -323,11 +326,11 @@ export async function registerUser(userData: {
     throw new Error('Registration failed')
   } catch (error) {
     console.error("Registration error:", error)
-    
+
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
       throw new Error("Network error. Pastikan:\n1. URL Google Apps Script sudah benar\n2. Web app sudah di-deploy dengan 'Execute as: Me'\n3. Akses diset ke 'Anyone'\n4. Spreadsheet sudah dibuat dengan sheet Users")
     }
-    
+
     throw new Error("Registration error: " + (error instanceof Error ? error.message : String(error)))
   }
 }
@@ -341,7 +344,7 @@ export async function getPosts() {
     }
 
     console.log('Fetching posts from API')
-    
+
     try {
       const response = await fetch(`${API_URL}?action=getPosts&t=${Date.now()}`, {
         method: "GET",
@@ -360,7 +363,7 @@ export async function getPosts() {
       }
     } catch (error) {
       console.log('Failed to get posts, returning mock data:', error)
-      
+
       // Return mock data jika API gagal
       return [
         {
@@ -440,7 +443,7 @@ export async function createPost(postData: {
       throw new Error('Create post failed')
     } catch (error) {
       console.log('Create post failed:', error)
-      
+
       // Return success untuk development
       return {
         message: "Post berhasil dibuat (mode development)",
