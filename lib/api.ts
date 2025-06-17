@@ -14,7 +14,10 @@ import {
 
 // Helper untuk menentukan apakah menggunakan mock API atau real API
 // Now using real Google Apps Script API
-const useMockAPI = () => false // Using real Google Apps Script
+const useMockAPI = () => {
+  // Force use real API
+  return false
+}
 
 // Simple password hashing function
 async function hashPassword(password: string): Promise<string> {
@@ -31,20 +34,36 @@ export async function testConnection() {
       return await mockTestConnection()
     }
 
+    console.log("Testing connection to:", API_URL)
+    
     const response = await fetch(`${API_URL}?action=test`, {
       method: "GET",
+      mode: 'cors',
       headers: {
         "Content-Type": "application/json",
+        "Accept": "application/json",
       },
     })
 
+    console.log("Test response status:", response.status)
+    console.log("Test response ok:", response.ok)
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      const errorText = await response.text()
+      console.error("Test connection failed:", errorText)
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`)
     }
 
-    return await response.json()
+    const result = await response.json()
+    console.log("Test connection result:", result)
+    return result
   } catch (error) {
     console.error("Connection test failed:", error)
+    
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      throw new Error("Unable to reach Google Apps Script. Please check the URL or try again later.")
+    }
+    
     throw new Error("Connection test failed: " + (error instanceof Error ? error.message : String(error)))
   }
 }
@@ -122,10 +141,13 @@ export async function registerUser(userData: {
   try {
     const isMock = useMockAPI()
     if (isMock) {
+      console.log("Using mock API for registration")
       return await mockRegisterUser(userData)
     }
 
+    console.log('Using real API for registration')
     console.log('Registering user:', userData)
+    
     // Use the same hashing as register page for consistency
     const hashedPassword = btoa(userData.password)
 
@@ -141,6 +163,15 @@ export async function registerUser(userData: {
 
     console.log('Registration payload:', payload)
 
+    // First test connection
+    try {
+      await testConnection()
+      console.log('Connection test successful')
+    } catch (connError) {
+      console.error('Connection test failed:', connError)
+      throw new Error("Unable to connect to the registration service. Please try again later.")
+    }
+
     const response = await fetch(API_URL, {
       method: 'POST',
       mode: 'cors',
@@ -151,10 +182,14 @@ export async function registerUser(userData: {
       body: JSON.stringify(payload),
     })
 
+    console.log('Response status:', response.status)
+    console.log('Response ok:', response.ok)
+
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('Registration failed:', errorText)
-      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`)
+      console.error('Registration failed with status:', response.status)
+      console.error('Error text:', errorText)
+      throw new Error(`Registration failed: ${response.status} - ${errorText}`)
     }
 
     const result = await response.json()
@@ -170,7 +205,11 @@ export async function registerUser(userData: {
     
     // Provide more specific error messages
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      throw new Error("Network error: Unable to connect to registration service. Please check your internet connection or try again later.")
+      throw new Error("Network error: Unable to connect to registration service. The Google Apps Script may be down or misconfigured.")
+    }
+    
+    if (error instanceof Error && error.message.includes('CORS')) {
+      throw new Error("CORS error: The registration service is not allowing requests from this domain.")
     }
     
     throw new Error("Registration error: " + (error instanceof Error ? error.message : String(error)))

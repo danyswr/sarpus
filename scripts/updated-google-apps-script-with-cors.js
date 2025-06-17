@@ -6,13 +6,16 @@
 
 function doGet(e) {
   try {
+    Logger.log("GET request received with params: " + JSON.stringify(e.parameter))
     var action = e.parameter.action || "test"
 
     if (action === "test") {
+      Logger.log("Test connection requested")
       var response = ContentService.createTextOutput(
         JSON.stringify({
           message: "Connection successful",
           timestamp: new Date().toISOString(),
+          status: "ok"
         }),
       ).setMimeType(ContentService.MimeType.JSON)
       
@@ -20,9 +23,11 @@ function doGet(e) {
       response.setHeaders({
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Accept',
+        'Access-Control-Max-Age': '86400',
       })
       
+      Logger.log("Test response sent successfully")
       return response
     }
 
@@ -48,7 +53,7 @@ function doGet(e) {
         response.setHeaders({
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Headers': 'Content-Type, Accept',
         })
         
         return response
@@ -62,7 +67,7 @@ function doGet(e) {
         response.setHeaders({
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Headers': 'Content-Type, Accept',
         })
         return response
       }
@@ -145,7 +150,7 @@ function doGet(e) {
       response.setHeaders({
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Accept',
       })
       return response
     }
@@ -159,7 +164,7 @@ function doGet(e) {
     response.setHeaders({
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Accept',
     })
     
     return response
@@ -175,7 +180,7 @@ function doGet(e) {
     response.setHeaders({
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Accept',
     })
     
     return response
@@ -185,6 +190,7 @@ function doGet(e) {
 function doPost(e) {
   try {
     Logger.log("POST request received")
+    Logger.log("POST data: " + e.postData.contents)
 
     var postData = e.postData.contents
     Logger.log("Content: " + postData)
@@ -196,6 +202,7 @@ function doPost(e) {
 
     // Create Likes sheet if it doesn't exist
     if (!sheetLikes) {
+      Logger.log("Creating Likes sheet")
       sheetLikes = spreadsheet.insertSheet("Likes")
       sheetLikes.appendRow(["idPostingan", "idUsers", "type", "timestamp"])
     }
@@ -244,7 +251,8 @@ function doPost(e) {
     result.setHeaders({
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Accept',
+      'Access-Control-Max-Age': '86400',
     })
 
     return result
@@ -260,7 +268,7 @@ function doPost(e) {
     response.setHeaders({
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Accept',
     })
     
     return response
@@ -269,9 +277,11 @@ function doPost(e) {
 
 function handleRegistration(params, sheetUsers) {
   try {
-    Logger.log("Registration attempt for: " + params.email)
+    Logger.log("Registration attempt for email: " + params.email)
+    Logger.log("Registration params: " + JSON.stringify(params))
     
     if (!params.email || !params.username || !params.password || !params.nim || !params.jurusan) {
+      Logger.log("Missing required fields")
       return ContentService.createTextOutput(
         JSON.stringify({
           error: "Semua field wajib diisi",
@@ -281,6 +291,7 @@ function handleRegistration(params, sheetUsers) {
 
     var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(params.email)) {
+      Logger.log("Invalid email format: " + params.email)
       return ContentService.createTextOutput(
         JSON.stringify({
           error: "Format email tidak valid",
@@ -298,11 +309,15 @@ function handleRegistration(params, sheetUsers) {
     }
 
     var idUsers = "USER" + Date.now() + Math.random().toString(36).substr(2, 5)
+    Logger.log("Generated user ID: " + idUsers)
+    
     var dataUsers = sheetUsers.getDataRange().getValues()
+    Logger.log("Existing users count: " + (dataUsers.length - 1))
 
     // Check if email already exists
     for (var k = 1; k < dataUsers.length; k++) {
       if (dataUsers[k][1] && dataUsers[k][1].toLowerCase() === params.email.toLowerCase()) {
+        Logger.log("Email already exists: " + params.email)
         return ContentService.createTextOutput(
           JSON.stringify({
             error: "Email sudah terdaftar",
@@ -314,6 +329,7 @@ function handleRegistration(params, sheetUsers) {
     // Check if NIM already exists
     for (var l = 1; l < dataUsers.length; l++) {
       if (dataUsers[l][4] && dataUsers[l][4] === params.nim) {
+        Logger.log("NIM already exists: " + params.nim)
         return ContentService.createTextOutput(
           JSON.stringify({
             error: "NIM sudah terdaftar",
@@ -323,7 +339,7 @@ function handleRegistration(params, sheetUsers) {
     }
 
     // Add new user with complete structure
-    sheetUsers.appendRow([
+    var newUserRow = [
       idUsers,
       params.email,
       params.username,
@@ -336,7 +352,10 @@ function handleRegistration(params, sheetUsers) {
       "", // bio
       "", // location
       "", // website
-    ])
+    ]
+    
+    Logger.log("Adding new user row: " + JSON.stringify(newUserRow))
+    sheetUsers.appendRow(newUserRow)
 
     Logger.log("User registered successfully: " + idUsers)
 
@@ -345,6 +364,7 @@ function handleRegistration(params, sheetUsers) {
         message: "Registrasi berhasil",
         idUsers: idUsers,
         role: role,
+        success: true
       }),
     ).setMimeType(ContentService.MimeType.JSON)
   } catch (e) {
@@ -352,6 +372,7 @@ function handleRegistration(params, sheetUsers) {
     return ContentService.createTextOutput(
       JSON.stringify({
         error: "Error saat registrasi: " + e.message,
+        details: e.toString()
       }),
     ).setMimeType(ContentService.MimeType.JSON)
   }
@@ -700,11 +721,13 @@ function handleImageUpload(params) {
 
 // Handle preflight OPTIONS requests for CORS
 function doOptions(e) {
+  Logger.log("OPTIONS request received")
   return ContentService.createTextOutput("")
     .setMimeType(ContentService.MimeType.TEXT)
     .setHeaders({
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Accept',
+      'Access-Control-Max-Age': '86400',
     })
 }
