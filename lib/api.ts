@@ -80,12 +80,36 @@ export async function loginUser(email: string, password: string) {
       }
       console.log("GET login failed, trying POST:", getResponse)
     } catch (getError) {
-      console.log("GET request failed, trying POST method")
+      console.log("GET request failed, trying POST method:", getError)
     }
 
-    // Method 2: Try POST with form data
+    // Method 2: Try POST with JSON (original method)
+    const loginData = {
+      action: "login",
+      email: email,
+      password: password,
+    }
+
+    console.log("Trying POST with JSON")
+    console.log("POST login payload:", loginData)
+
+    const response = await makeRequest(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(loginData),
+    })
+
+    console.log("JSON POST Login response:", response)
+    
+    if (response && !response.error) {
+      return response
+    }
+
+    // Method 3: Try POST with form data as fallback
     try {
-      console.log("Trying POST with form data")
+      console.log("JSON POST failed, trying form data")
       const formData = new FormData()
       formData.append('action', 'login')
       formData.append('email', email)
@@ -106,28 +130,15 @@ export async function loginUser(email: string, password: string) {
         }
       }
     } catch (formError) {
-      console.log("Form POST failed, trying JSON POST")
+      console.log("Form POST also failed:", formError)
     }
 
-    // Method 3: Try POST with JSON (original method)
-    const loginData = {
-      action: "login",
-      email: email,
-      password: password,
+    // If we reach here, return the last response or error
+    if (response && response.error) {
+      return response
     }
 
-    console.log("POST login payload:", loginData)
-
-    const response = await makeRequest(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(loginData),
-    })
-
-    console.log("JSON POST Login response:", response)
-    return response
+    return { error: "Login failed: Unable to connect to server" }
 
   } catch (error) {
     console.error("All login methods failed:", error)

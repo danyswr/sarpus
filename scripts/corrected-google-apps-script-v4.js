@@ -165,26 +165,29 @@ function handleLogin(e) {
         Logger.log("User found! Stored password: " + userPassword);
         Logger.log("Input password: " + password);
         
-        // Check password - support plain text, base64, atau hash
+        // Check password - support plain text atau base64
         var isPasswordValid = false;
         
-        // Try direct match
+        // Try direct match first
         if (userPassword === password) {
           isPasswordValid = true;
+          Logger.log("Direct password match");
         }
-        // Try base64 decode
-        else if (userPassword === btoa(password)) {
+        // Try base64 encoding (manual implementation)
+        else if (userPassword === base64Encode(password)) {
           isPasswordValid = true;
+          Logger.log("Base64 encoded password match");
         }
-        // Try decode base64 input
+        // Try decode base64 input (manual implementation)
         else {
           try {
-            var decodedPassword = atob(password);
+            var decodedPassword = base64Decode(password);
             if (userPassword === decodedPassword) {
               isPasswordValid = true;
+              Logger.log("Base64 decoded password match");
             }
           } catch (e) {
-            // Not base64, continue
+            Logger.log("Base64 decode failed: " + e.toString());
           }
         }
         
@@ -464,6 +467,52 @@ function findColumn(headers, columnName) {
     }
   }
   return -1;
+}
+
+// Manual Base64 encoding function for Google Apps Script
+function base64Encode(str) {
+  var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  var result = '';
+  var i = 0;
+  
+  while (i < str.length) {
+    var a = str.charCodeAt(i++);
+    var b = i < str.length ? str.charCodeAt(i++) : 0;
+    var c = i < str.length ? str.charCodeAt(i++) : 0;
+    
+    var bitmap = (a << 16) | (b << 8) | c;
+    
+    result += chars.charAt((bitmap >> 18) & 63);
+    result += chars.charAt((bitmap >> 12) & 63);
+    result += i - 2 < str.length ? chars.charAt((bitmap >> 6) & 63) : '=';
+    result += i - 1 < str.length ? chars.charAt(bitmap & 63) : '=';
+  }
+  
+  return result;
+}
+
+// Manual Base64 decoding function for Google Apps Script
+function base64Decode(str) {
+  var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  var result = '';
+  var i = 0;
+  
+  str = str.replace(/[^A-Za-z0-9+/]/g, '');
+  
+  while (i < str.length) {
+    var encoded1 = chars.indexOf(str.charAt(i++));
+    var encoded2 = chars.indexOf(str.charAt(i++));
+    var encoded3 = chars.indexOf(str.charAt(i++));
+    var encoded4 = chars.indexOf(str.charAt(i++));
+    
+    var bitmap = (encoded1 << 18) | (encoded2 << 12) | (encoded3 << 6) | encoded4;
+    
+    result += String.fromCharCode((bitmap >> 16) & 255);
+    if (encoded3 !== 64) result += String.fromCharCode((bitmap >> 8) & 255);
+    if (encoded4 !== 64) result += String.fromCharCode(bitmap & 255);
+  }
+  
+  return result;
 }
 
 function getCredentials(e) {
