@@ -25,6 +25,10 @@ function handleRequest(e) {
     // Dapatkan action
     var action = getAction(e);
     Logger.log("Action: " + action);
+    Logger.log("Parameters: " + JSON.stringify(e.parameter));
+    if (e.postData) {
+      Logger.log("POST data: " + e.postData.contents);
+    }
 
     var result = {};
 
@@ -103,6 +107,7 @@ function handleLogin(e) {
     var password = credentials.password;
 
     Logger.log("Login attempt for: " + email);
+    Logger.log("Password received: " + (password ? "Yes (length: " + password.length + ")" : "No"));
 
     if (!email || !password) {
       return { error: "Email dan password harus diisi" };
@@ -116,6 +121,8 @@ function handleLogin(e) {
     }
 
     var data = usersSheet.getDataRange().getValues();
+    Logger.log("Total users in sheet: " + (data.length - 1));
+    
     if (data.length < 2) {
       return { error: "Tidak ada data user" };
     }
@@ -124,30 +131,49 @@ function handleLogin(e) {
     var emailCol = findColumn(headers, "email");
     var passwordCol = findColumn(headers, "password");
 
+    Logger.log("Email column: " + emailCol + ", Password column: " + passwordCol);
+
     if (emailCol === -1 || passwordCol === -1) {
       return { error: "Kolom email atau password tidak ditemukan" };
     }
 
-    // Cari user
+    // Cari user berdasarkan email
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
-      if (row[emailCol] === email && row[passwordCol] === password) {
-        return {
-          message: "Login berhasil",
-          idUsers: row[findColumn(headers, "idUsers")] || "USER_" + i,
-          username: row[findColumn(headers, "username")] || email.split('@')[0],
-          email: email,
-          role: row[findColumn(headers, "role")] || "user",
-          nim: row[findColumn(headers, "nim")] || "",
-          jurusan: row[findColumn(headers, "jurusan")] || "",
-          bio: row[findColumn(headers, "bio")] || "",
-          location: row[findColumn(headers, "location")] || "",
-          website: row[findColumn(headers, "website")] || ""
-        };
+      var userEmail = row[emailCol];
+      var userPassword = row[passwordCol];
+      
+      Logger.log("Checking user " + i + ": " + userEmail);
+      
+      if (userEmail && userEmail.toString().toLowerCase() === email.toLowerCase()) {
+        Logger.log("User found! Stored password: " + userPassword);
+        Logger.log("Input password: " + password);
+        
+        // Check password - bisa plain text atau hashed
+        if (userPassword === password || userPassword === btoa(password)) {
+          Logger.log("Password match!");
+          
+          return {
+            message: "Login berhasil",
+            idUsers: row[findColumn(headers, "idUsers")] || "USER_" + i,
+            username: row[findColumn(headers, "username")] || email.split('@')[0],
+            email: email,
+            role: row[findColumn(headers, "role")] || "user",
+            nim: row[findColumn(headers, "nim")] || "",
+            jurusan: row[findColumn(headers, "jurusan")] || "",
+            bio: row[findColumn(headers, "bio")] || "",
+            location: row[findColumn(headers, "location")] || "",
+            website: row[findColumn(headers, "website")] || ""
+          };
+        } else {
+          Logger.log("Password mismatch!");
+          return { error: "Password salah" };
+        }
       }
     }
 
-    return { error: "Email atau password salah" };
+    Logger.log("User not found with email: " + email);
+    return { error: "Email tidak ditemukan" };
 
   } catch (error) {
     Logger.log("Login error: " + error.toString());
@@ -186,13 +212,15 @@ function handleRegister(e) {
       }
     }
 
-    // Tambah user baru
+    // Tambah user baru - simpan password sebagai hashed
     var newId = "USER_" + Date.now();
+    var hashedPassword = userData.password; // Sudah di-hash dari client
+    
     var newRow = [
       newId,                        // idUsers
       userData.username,            // username
       userData.email,               // email
-      userData.password,            // password
+      hashedPassword,               // password (hashed)
       "user",                       // role
       userData.nim || "",           // nim
       userData.jurusan || "",       // jurusan

@@ -86,16 +86,22 @@ export async function loginUser(email: string, password: string) {
     try {
       const getUrl = `${API_URL}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(hashedPassword)}&_=${Date.now()}`
       
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+
       const response = await fetch(getUrl, {
         method: "GET",
         headers: {
           "Accept": "application/json",
         },
+        signal: controller.signal
       })
+      
+      clearTimeout(timeoutId)
       
       if (response.ok) {
         const result = await response.json()
-        console.log('Login response:', result)
+        console.log('GET Login response:', result)
         
         if (result.error) {
           throw new Error(result.error)
@@ -113,8 +119,31 @@ export async function loginUser(email: string, password: string) {
           location: result.location || "",
           website: result.website || "",
         }
+      } else if (response.status === 302) {
+        // Handle redirect - likely means the script is working but redirecting
+        console.log('Got redirect, trying to parse response')
+        try {
+          const result = await response.json()
+          if (result.error) {
+            throw new Error(result.error)
+          }
+          return {
+            message: "Login berhasil",
+            idUsers: result.idUsers || "USER_" + Date.now(),
+            role: result.role || "user",
+            username: result.username || email.split('@')[0],
+            email: result.email || email,
+            nim: result.nim || "",
+            jurusan: result.jurusan || "",
+            bio: result.bio || "",
+            location: result.location || "",
+            website: result.website || "",
+          }
+        } catch (parseError) {
+          throw new Error("Login berhasil tapi response tidak bisa di-parse")
+        }
       } else {
-        throw new Error(`HTTP ${response.status}`)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
     } catch (getError) {
       console.log('GET login failed, trying POST:', getError)
@@ -128,13 +157,19 @@ export async function loginUser(email: string, password: string) {
 
       console.log('Fallback POST login payload:', payload)
 
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+
       const response = await fetch(API_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
+        signal: controller.signal
       })
+
+      clearTimeout(timeoutId)
 
       if (response.ok) {
         const result = await response.json()
@@ -156,8 +191,30 @@ export async function loginUser(email: string, password: string) {
           location: result.location || "",
           website: result.website || "",
         }
+      } else if (response.status === 302) {
+        // Handle redirect for POST too
+        try {
+          const result = await response.json()
+          if (result.error) {
+            throw new Error(result.error)
+          }
+          return {
+            message: "Login berhasil",
+            idUsers: result.idUsers || "USER_" + Date.now(),
+            role: result.role || "user",
+            username: result.username || email.split('@')[0],
+            email: result.email || email,
+            nim: result.nim || "",
+            jurusan: result.jurusan || "",
+            bio: result.bio || "",
+            location: result.location || "",
+            website: result.website || "",
+          }
+        } catch (parseError) {
+          throw new Error("Login berhasil tapi response tidak bisa di-parse")
+        }
       } else {
-        throw new Error(`HTTP ${response.status}`)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
     }
     
@@ -165,7 +222,11 @@ export async function loginUser(email: string, password: string) {
     console.error("Login error:", error)
     
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      throw new Error("Network error. Pastikan URL Google Apps Script benar dan sudah di-deploy dengan akses 'Anyone'")
+      throw new Error("Network error. Pastikan:\n1. URL Google Apps Script sudah benar\n2. Web app sudah di-deploy dengan 'Execute as: Me'\n3. Akses diset ke 'Anyone'\n4. Google Apps Script sudah di-save dan di-deploy ulang")
+    }
+    
+    if (error.name === 'AbortError') {
+      throw new Error("Koneksi timeout. Coba lagi beberapa saat.")
     }
     
     if (error instanceof Error) {
